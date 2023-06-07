@@ -1,15 +1,13 @@
-use anyhow::anyhow;
-use colored::*;
+use async_graphql::SimpleObject;
 use ethers_contract::EthAbiType;
 use ethers_core::types::transaction::eip712::Eip712;
 use ethers_derive_eip712::*;
 use prost::Message;
 use serde::{Deserialize, Serialize};
-use tracing::error;
 
-#[derive(Eip712, EthAbiType, Clone, Message, Serialize, Deserialize)]
+#[derive(Eip712, EthAbiType, Clone, Message, Serialize, Deserialize, PartialEq, SimpleObject)]
 #[eip712(
-    name = "Graphcast Ping-Pong Radio",
+    name = "Graphcast Radio Message type 1",
     version = "0",
     chain_id = 1,
     verifying_contract = "0xc944e90c64b2c07662a292be6244bdf05cda44a7"

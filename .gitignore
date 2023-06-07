@@ -5,5 +5,6 @@
 /Cargo.lock
 /.idea
 /.fleet
+/.vscode
 /examples/target
 boot_node_addr.conf
