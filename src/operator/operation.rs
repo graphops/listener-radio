@@ -1,9 +1,9 @@
 use autometrics::autometrics;
-use std::sync::{mpsc, Mutex as SyncMutex};
-use tracing::{error, trace};
 use graphcast_sdk::graphcast_agent::{
     message_typing::GraphcastMessage, waku_handling::WakuHandlingError,
 };
+use std::sync::{mpsc, Mutex as SyncMutex};
+use tracing::{error, trace};
 
 use crate::{metrics::VALIDATED_MESSAGES, operator::RadioOperator};
 
@@ -29,8 +29,6 @@ impl RadioOperator {
                     Ok(_) => trace!("Sent received message to radio operator"),
                     Err(e) => error!("Could not send message to channel, {:#?}", e),
                 };
-
-                //TODO: Make sure CACHED_MESSAGES is updated
             } else {
                 trace!(msg = tracing::field::debug(&msg), "Invalid message");
             }

@@ -69,16 +69,21 @@ impl RadioOperator {
 
         let notifier = Notifier::from_config(&config);
 
-        debug!("Establish a single connection");
-        
+        debug!("Connecting to database");
+
         let db = PgPoolOptions::new()
             .max_connections(50)
             .connect(&config.database_url)
             .await
             .expect("Could not connect to DATABASE_URL");
 
-        debug!("Check for DB migration");
-        sqlx::migrate!().run(&db).await.expect("Could not run migration");
+        debug!("Check for database migration");
+        sqlx::migrate!()
+            .run(&db)
+            .await
+            .expect("Could not run migration");
+
+        debug!("Initialized Radio Operator");
         RadioOperator {
             config,
             db,
@@ -97,18 +102,20 @@ impl RadioOperator {
             tokio::spawn(handle_serve_metrics(self.config.metrics_host.clone(), port));
         }
 
-        // Provide generated topics to Graphcast agent
-        let topics = self
-            .config
-            .generate_topics(self.indexer_address.clone())
-            .await;
-        debug!(
-            topics = tracing::field::debug(&topics),
-            "Found content topics for subscription",
-        );
-        self.graphcast_agent
-            .update_content_topics(topics.clone())
-            .await;
+        if let Some(true) = self.config.filter_protocol {
+            // Provide generated topics to Graphcast agent
+            let topics = self
+                .config
+                .generate_topics(self.indexer_address.clone())
+                .await;
+            debug!(
+                topics = tracing::field::debug(&topics),
+                "Found content topics for subscription",
+            );
+            self.graphcast_agent
+                .update_content_topics(topics.clone())
+                .await;
+        }
 
         let (sender, receiver) = mpsc::channel::<GraphcastMessage<RadioPayloadMessage>>();
         let handler = RadioOperator::radio_msg_handler(SyncMutex::new(sender));
@@ -168,20 +175,22 @@ impl RadioOperator {
             // Run event intervals sequentially by satisfication of other intervals and corresponding tick
             tokio::select! {
                 _ = topic_update_interval.tick() => {
-                    if skip_iteration.load(Ordering::SeqCst) {
-                        skip_iteration.store(false, Ordering::SeqCst);
-                        continue;
-                    }
-                    // Update topic subscription
-                    let result = timeout(update_timeout,
-                        self.graphcast_agent()
-                        .update_content_topics(self.config.generate_topics(self.indexer_address.clone()).await)
-                    ).await;
+                    if let Some(true) = self.config.filter_protocol {
+                        if skip_iteration.load(Ordering::SeqCst) {
+                            skip_iteration.store(false, Ordering::SeqCst);
+                            continue;
+                        }
+                        // Update topic subscription
+                        let result = timeout(update_timeout,
+                            self.graphcast_agent()
+                            .update_content_topics(self.config.generate_topics(self.indexer_address.clone()).await)
+                        ).await;
 
-                    if result.is_err() {
-                        warn!("update_content_topics timed out");
-                    } else {
-                        debug!("update_content_topics completed");
+                        if result.is_err() {
+                            warn!("update_content_topics timed out");
+                        } else {
+                            debug!("update_content_topics completed");
+                        }
                     }
                 },
                 _ = comparison_interval.tick() => {
@@ -189,7 +198,6 @@ impl RadioOperator {
                         skip_iteration.store(false, Ordering::SeqCst);
                         continue;
                     }
-
                     // TODO: Generate some summary
                 },
                 else => break,

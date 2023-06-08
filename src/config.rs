@@ -43,6 +43,13 @@ pub struct Config {
     pub database_url: String,
     #[clap(
         long,
+        value_name = "FILTER_PROTOCOL",
+        env = "FILTER_PROTOCOL",
+        help = "Enable filter subscriptions based on topic generation"
+    )]
+    pub filter_protocol: Option<bool>,
+    #[clap(
+        long,
         value_name = "ENDPOINT",
         env = "GRAPH_NODE_STATUS_ENDPOINT",
         help = "API endpoint to the Graph Node Status Endpoint"
@@ -261,6 +268,7 @@ pub struct Config {
         default_value = "pretty"
     )]
     pub log_format: String,
+    // This is only used when filtering for specific radios
     #[clap(
         long,
         value_name = "RADIO_NAME",
@@ -320,6 +328,7 @@ impl Config {
             self.waku_host.clone(),
             self.waku_port.clone(),
             self.waku_addr.clone(),
+            self.filter_protocol,
             self.discv5_enrs.clone(),
             self.discv5_port,
         )
