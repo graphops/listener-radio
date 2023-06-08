@@ -12,13 +12,16 @@ use tokio::signal;
 use tracing::error;
 
 use graphcast_sdk::{
-    graphcast_agent::GraphcastAgent, graphql::client_network::query_network_subgraph,
-    networks::NetworkName, BlockPointer,
+    graphcast_agent::GraphcastAgent,
     graphcast_agent::GraphcastAgentError,
+    graphql::client_network::query_network_subgraph,
     graphql::{client_graph_node::get_indexing_statuses, QueryError},
+    networks::NetworkName,
+    BlockPointer,
 };
 
 pub mod config;
+pub mod db;
 pub mod metrics;
 pub mod operator;
 

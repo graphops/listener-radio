@@ -22,7 +22,7 @@ impl RadioOperator {
             // TODO: Handle the error case by incrementing a Prometheus "error" counter
             if let Ok(msg) = msg {
                 trace!(msg = tracing::field::debug(&msg), "Received message");
-                let id = msg.identifier.clone();
+                let id: String = msg.identifier.clone();
                 VALIDATED_MESSAGES.with_label_values(&[&id]).inc();
                 match sender.lock().unwrap().send(msg) {
                     //TODO: Compare if the message should be stored here or when it gets to the receiver
@@ -32,6 +32,8 @@ impl RadioOperator {
                 };
 
                 //TODO: Make sure CACHED_MESSAGES is updated
+            } else {
+                trace!(msg = tracing::field::debug(&msg), "Invalid message");
             }
         }
     }

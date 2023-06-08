@@ -1,10 +1,12 @@
+use sqlx::postgres::PgPoolOptions;
+use sqlx::{Pool, Postgres};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex as SyncMutex};
 use std::thread;
 use std::time::Duration;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::time::{interval, sleep, timeout};
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use graphcast_sdk::{
     build_wallet,
@@ -14,6 +16,7 @@ use graphcast_sdk::{
 };
 
 use crate::config::Config;
+use crate::db::resolver::{add_message, list_messages};
 use crate::metrics::handle_serve_metrics;
 use crate::operator::radio_types::RadioPayloadMessage;
 use crate::GRAPHCAST_AGENT;
@@ -28,7 +31,7 @@ pub mod radio_types;
 #[allow(unused)]
 pub struct RadioOperator {
     config: Config,
-    // db client
+    db: Pool<Postgres>,
     graphcast_agent: Arc<GraphcastAgent>,
     notifier: Notifier,
     indexer_address: String,
@@ -66,8 +69,17 @@ impl RadioOperator {
 
         let notifier = Notifier::from_config(&config);
 
+        debug!("Establish a single connection");
+        let db = PgPoolOptions::new()
+            .max_connections(50)
+            .connect(&config.database_url)
+            .await
+            .expect("Could not connect to DATABASE_URL");
+        //TODO: Switch from creating the table to migrations
+        // sqlx::migrate!().run(&db).await.expect("Could not run migration");
         RadioOperator {
             config,
+            db,
             graphcast_agent,
             notifier,
             indexer_address,
@@ -103,14 +115,28 @@ impl RadioOperator {
             .unwrap()
             .register_handler(Arc::new(AsyncMutex::new(handler)))
             .expect("Could not register handler");
+        //TODO: allow radio operator's db to be passed into async thread
+        let db = PgPoolOptions::new()
+            .max_connections(50)
+            .connect(&self.config.database_url)
+            .await
+            .expect("Could not connect to DATABASE_URL");
         thread::spawn(move || {
-            for msg in receiver {
-                trace!(
-                    "Radio operator received a validated message from Graphcast agent: {:#?}",
-                    msg
-                );
-                // TODO: store in db
-            }
+            tokio::runtime::Runtime::new().unwrap().block_on(async {
+                for msg in receiver {
+                    info!(
+                        "Radio operator received a validated message from Graphcast agent: {:#?}",
+                        msg
+                    );
+                    if let Err(e) = add_message(&db, msg).await {
+                        warn!(err = tracing::field::debug(&e), "Failed to store message");
+                    } else {
+                        let msgs =
+                            list_messages::<GraphcastMessage<RadioPayloadMessage>>(&db).await;
+                        trace!(msgs = tracing::field::debug(&msgs), "now there is!");
+                    };
+                }
+            })
         });
     }
 

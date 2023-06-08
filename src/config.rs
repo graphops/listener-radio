@@ -36,6 +36,13 @@ pub enum CoverageLevel {
 pub struct Config {
     #[clap(
         long,
+        value_name = "DATABASE_URL",
+        env = "DATABASE_URL",
+        help = "Postgres database url"
+    )]
+    pub database_url: String,
+    #[clap(
+        long,
         value_name = "ENDPOINT",
         env = "GRAPH_NODE_STATUS_ENDPOINT",
         help = "API endpoint to the Graph Node Status Endpoint"
