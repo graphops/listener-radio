@@ -1,7 +1,6 @@
 use autometrics::autometrics;
 use std::sync::{mpsc, Mutex as SyncMutex};
 use tracing::{error, trace};
-
 use graphcast_sdk::graphcast_agent::{
     message_typing::GraphcastMessage, waku_handling::WakuHandlingError,
 };

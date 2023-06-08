@@ -70,13 +70,15 @@ impl RadioOperator {
         let notifier = Notifier::from_config(&config);
 
         debug!("Establish a single connection");
+        
         let db = PgPoolOptions::new()
             .max_connections(50)
             .connect(&config.database_url)
             .await
             .expect("Could not connect to DATABASE_URL");
-        //TODO: Switch from creating the table to migrations
-        // sqlx::migrate!().run(&db).await.expect("Could not run migration");
+
+        debug!("Check for DB migration");
+        sqlx::migrate!().run(&db).await.expect("Could not run migration");
         RadioOperator {
             config,
             db,
