@@ -117,12 +117,8 @@ impl RadioOperator {
             .unwrap()
             .register_handler(Arc::new(AsyncMutex::new(handler)))
             .expect("Could not register handler");
-        //TODO: allow radio operator's db to be passed into async thread
-        let db = PgPoolOptions::new()
-            .max_connections(50)
-            .connect(&self.config.database_url)
-            .await
-            .expect("Could not connect to DATABASE_URL");
+
+        let db = self.db.clone();
         thread::spawn(move || {
             tokio::runtime::Runtime::new().unwrap().block_on(async {
                 for msg in receiver {
