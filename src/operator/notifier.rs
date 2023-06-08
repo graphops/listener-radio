@@ -4,7 +4,7 @@ use graphcast_sdk::bots::{DiscordBot, SlackBot, TelegramBot};
 use serde_derive::{Deserialize, Serialize};
 use tracing::warn;
 
-use crate::config::Config;
+use crate::{config::Config, radio_name};
 
 #[derive(Clone, Debug, Getters, Serialize, Deserialize, PartialEq)]
 pub struct Notifier {
@@ -36,7 +36,7 @@ impl Notifier {
     }
 
     pub fn from_config(config: &Config) -> Self {
-        let radio_name = config.radio_name.clone();
+        let radio_name = radio_name().to_string();
         let slack_token = config.slack_token.clone();
         let slack_channel = config.slack_channel.clone();
         let discord_webhook = config.discord_webhook.clone();
