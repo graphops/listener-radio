@@ -5,9 +5,10 @@ use ethers_derive_eip712::*;
 use prost::Message;
 use serde::{Deserialize, Serialize};
 
+// EIP-712 name will change encoding, append other unique message types/names to decode properly
 #[derive(Eip712, EthAbiType, Clone, Message, Serialize, Deserialize, PartialEq, SimpleObject)]
 #[eip712(
-    name = "Graphcast Radio Message type 1",
+    name = "Graphcast POI Radio",
     version = "0",
     chain_id = 1,
     verifying_contract = "0xc944e90c64b2c07662a292be6244bdf05cda44a7"

@@ -73,6 +73,7 @@ impl RadioOperator {
 
         let db = PgPoolOptions::new()
             .max_connections(50)
+            .connect_timeout(Duration::from_secs(3))
             .connect(&config.database_url)
             .await
             .expect("Could not connect to DATABASE_URL");
