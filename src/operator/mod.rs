@@ -19,6 +19,7 @@ use crate::config::Config;
 use crate::db::resolver::{add_message, list_messages};
 use crate::metrics::handle_serve_metrics;
 use crate::operator::radio_types::RadioPayloadMessage;
+use crate::server::run_server;
 use crate::GRAPHCAST_AGENT;
 
 use self::notifier::Notifier;
@@ -169,6 +170,13 @@ impl RadioOperator {
             tokio::time::sleep(iteration_timeout).await;
             skip_iteration_clone.store(true, Ordering::SeqCst);
         });
+
+        // Initialize Http server with graceful shutdown if configured
+        if self.config.server_port().is_some() {
+            let config = self.config.clone();
+            let db = self.db.clone();
+            tokio::spawn(run_server(config, db, running.clone()));
+        }
 
         // Main loop for sending messages, can factor out
         // and take radio specific query and parsing for radioPayload
