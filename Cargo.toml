@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-graphcast_sdk = { package = "graphcast-sdk",  git = "https://github.com/graphops/graphcast-sdk", branch = "hope/protocol-toggle" }
+graphcast_sdk = { package = "graphcast-sdk",  git = "https://github.com/graphops/graphcast-sdk" }
 anyhow = "1.0"
 axum = { version = "0.5", features = ["headers"] }
 async-graphql = "4.0.16"
