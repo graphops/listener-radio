@@ -1,4 +1,4 @@
-FROM debian:latest
+FROM rust:1-bullseye AS build-image
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -14,15 +14,26 @@ RUN apt-get update \
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup-init.sh \
-&& sh rustup-init.sh -y --default-toolchain stable --no-modify-path
-ENV PATH="/root/.cargo/bin:${PATH}" 
-
 COPY . /graphcast-3la
 WORKDIR /graphcast-3la
 
 RUN sh install-golang.sh
 ENV PATH=$PATH:/usr/local/go/bin
 
-RUN cargo build
-CMD ["cargo", "run", "boot"]
+RUN cargo build --release -p graphcast-3la
+
+FROM alpine:3.17.3 as alpine
+RUN set -x \
+    && apk update \
+    && apk add --no-cache upx dumb-init
+COPY --from=build-image /graphcast-3la/target/release/graphcast-3la /graphcast-3la/target/release/graphcast-3la
+RUN upx --overlay=strip --best /graphcast-3la/target/release/graphcast-3la
+
+FROM gcr.io/distroless/cc AS runtime
+COPY --from=build-image /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=build-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build-image /etc/passwd /etc/passwd
+COPY --from=build-image /etc/group /etc/group
+COPY --from=alpine /usr/bin/dumb-init /usr/bin/dumb-init
+COPY --from=alpine "/graphcast-3la/target/release/graphcast-3la" "/usr/local/bin/graphcast-3la"
+ENTRYPOINT [ "/usr/bin/dumb-init", "--", "/usr/local/bin/graphcast-3la" ]
