@@ -20,21 +20,21 @@ impl RadioOperator {
     pub fn radio_msg_handler(
         sender: SyncMutex<mpsc::Sender<GraphcastMessage<RadioPayloadMessage>>>,
     ) -> impl Fn(Result<GraphcastMessage<RadioPayloadMessage>, WakuHandlingError>) {
-        move |msg: Result<GraphcastMessage<RadioPayloadMessage>, WakuHandlingError>| {
-            match msg {
-                Ok(msg) => {
-                    trace!(msg = tracing::field::debug(&msg), "Received message");
-                    let id: String = msg.identifier.clone();
-                    VALIDATED_MESSAGES.with_label_values(&[&id]).inc();
-                    match sender.lock().unwrap().send(msg) {
-                        Ok(_) => trace!("Sent received message to radio operator"),
-                        Err(e) => error!("Could not send message to channel, {:#?}", e),
-                    };
-                }
-                Err(e) => {
-                    INVALIDATED_MESSAGES.with_label_values(&[e.type_string()]).inc();
-                    trace!(msg = tracing::field::debug(&e), "Invalid message");
-                }
+        move |msg: Result<GraphcastMessage<RadioPayloadMessage>, WakuHandlingError>| match msg {
+            Ok(msg) => {
+                trace!(msg = tracing::field::debug(&msg), "Received message");
+                let id: String = msg.identifier.clone();
+                VALIDATED_MESSAGES.with_label_values(&[&id]).inc();
+                match sender.lock().unwrap().send(msg) {
+                    Ok(_) => trace!("Sent received message to radio operator"),
+                    Err(e) => error!("Could not send message to channel, {:#?}", e),
+                };
+            }
+            Err(e) => {
+                INVALIDATED_MESSAGES
+                    .with_label_values(&[e.type_string()])
+                    .inc();
+                trace!(msg = tracing::field::debug(&e), "Invalid message");
             }
         }
     }

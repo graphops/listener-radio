@@ -7,12 +7,14 @@ use ethers::signers::WalletError;
 use graphcast_sdk::{
     build_wallet,
     callbook::CallBook,
-    graphcast_agent::{GraphcastAgent, GraphcastAgentConfig, GraphcastAgentError, message_typing::IdentityValidation},
-    wallet_address,
+    graphcast_agent::{
+        message_typing::IdentityValidation, GraphcastAgent, GraphcastAgentConfig,
+        GraphcastAgentError,
+    },
     graphql::{
         client_network::query_network_subgraph, client_registry::query_registry, QueryError,
     },
-    init_tracing,
+    init_tracing, wallet_address,
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -368,11 +370,8 @@ impl Config {
         .map_err(|e| QueryError::Other(e.into()))?;
         // The query here must be Ok but so it is okay to panic here
         // Alternatively, make validate_set_up return wallet, address, and stake
-        let my_address = query_registry(
-            self.registry_subgraph.to_string(),
-            wallet_address(&wallet),
-        )
-        .await?;
+        let my_address =
+            query_registry(self.registry_subgraph.to_string(), wallet_address(&wallet)).await?;
         let my_stake =
             query_network_subgraph(self.network_subgraph.to_string(), my_address.clone())
                 .await

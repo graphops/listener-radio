@@ -6,18 +6,18 @@ use std::thread;
 use std::time::Duration;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::time::{interval, sleep, timeout};
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, info, warn};
 
 use graphcast_sdk::{
     build_wallet,
     graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent},
-    wallet_address,
     graphql::client_registry::query_registry,
+    wallet_address,
 };
 
 use crate::config::Config;
 use crate::db::resolver::{add_message, list_messages};
-use crate::metrics::handle_serve_metrics;
+use crate::metrics::{handle_serve_metrics, CACHED_MESSAGES};
 use crate::operator::radio_types::RadioPayloadMessage;
 use crate::server::run_server;
 use crate::GRAPHCAST_AGENT;
@@ -137,10 +137,6 @@ impl RadioOperator {
                     );
                     if let Err(e) = add_message(&db, msg).await {
                         warn!(err = tracing::field::debug(&e), "Failed to store message");
-                    } else {
-                        let msgs =
-                            list_messages::<GraphcastMessage<RadioPayloadMessage>>(&db).await;
-                        trace!(msgs = tracing::field::debug(&msgs), "now there is!");
                     };
                 }
             })
@@ -207,7 +203,15 @@ impl RadioOperator {
                         skip_iteration.store(false, Ordering::SeqCst);
                         continue;
                     }
-                    // TODO: Generate some summary
+                    let msgs =
+                        list_messages::<GraphcastMessage<RadioPayloadMessage>>(&self.db).await;
+                    let msg_num = &msgs.map_or(0, |m| m.len());
+                    CACHED_MESSAGES
+                        .set(*msg_num as i64);
+                    info!(total_messages = msg_num,
+                        total_topic_filters = self.graphcast_agent.content_identifiers().await.len(),
+                        "Monitoring summary"
+                    );
                 },
                 else => break,
             }

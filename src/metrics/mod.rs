@@ -4,7 +4,7 @@ use axum::routing::get;
 use axum::Router;
 use once_cell::sync::Lazy;
 use prometheus::{core::Collector, Registry};
-use prometheus::{IntCounterVec, IntGaugeVec, Opts};
+use prometheus::{IntCounterVec, IntGauge, Opts};
 use std::{net::SocketAddr, str::FromStr};
 use tracing::{debug, info};
 
@@ -14,7 +14,7 @@ pub static VALIDATED_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
     let m = IntCounterVec::new(
         Opts::new("validated_messages", "Number of validated messages")
             .namespace("graphcast")
-            .subsystem("poi_radio"),
+            .subsystem("3la"),
         &["deployment"],
     )
     .expect("Failed to create validated_messages counters");
@@ -29,8 +29,8 @@ pub static INVALIDATED_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
     let m = IntCounterVec::new(
         Opts::new("invalid_messages", "Number of invalid messages received")
             .namespace("graphcast")
-            .subsystem("poi_radio"),
-            &["error_type"],
+            .subsystem("3la"),
+        &["error_type"],
     )
     .expect("Failed to create invalid_messages counters");
     prometheus::register(Box::new(m.clone()))
@@ -40,32 +40,14 @@ pub static INVALIDATED_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
 
 // Received (and validated) messages counter
 #[allow(dead_code)]
-pub static CACHED_MESSAGES: Lazy<IntGaugeVec> = Lazy::new(|| {
-    let m = IntGaugeVec::new(
+pub static CACHED_MESSAGES: Lazy<IntGauge> = Lazy::new(|| {
+    let m = IntGauge::with_opts(
         Opts::new("cached_messages", "Number of messages in cache")
             .namespace("graphcast")
-            .subsystem("poi_radio"),
-        &["deployment"],
+            .subsystem("3la"),
     )
     .expect("Failed to create cached_messages gauges");
     prometheus::register(Box::new(m.clone())).expect("Failed to register cached_messages guage");
-    m
-});
-
-// These are the subgraphs that are being actively cross-checked (the ones we are receiving remote attestations for)
-#[allow(dead_code)]
-pub static ACTIVE_INDEXERS: Lazy<IntGaugeVec> = Lazy::new(|| {
-    let m = IntGaugeVec::new(
-        Opts::new(
-            "ACTIVE_INDEXERS",
-            "Number of indexers actively crosschecking on the deployment (self excluded)",
-        )
-        .namespace("graphcast")
-        .subsystem("poi_radio"),
-        &["deployment"],
-    )
-    .expect("Failed to create ACTIVE_INDEXERS gauges");
-    prometheus::register(Box::new(m.clone())).expect("Failed to register ACTIVE_INDEXERS counter");
     m
 });
 
@@ -88,7 +70,6 @@ pub fn start_metrics() {
             Box::new(VALIDATED_MESSAGES.clone()),
             Box::new(INVALIDATED_MESSAGES.clone()),
             Box::new(CACHED_MESSAGES.clone()),
-            Box::new(ACTIVE_INDEXERS.clone()),
         ],
     );
 }

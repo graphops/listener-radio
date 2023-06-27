@@ -2,6 +2,7 @@ use async_graphql::OutputType;
 use serde::{de::DeserializeOwned, Serialize};
 use sqlx::{types::Json, PgPool};
 use std::ops::Deref;
+use tracing::trace;
 
 use crate::server::model::GraphQLRow;
 
@@ -58,7 +59,11 @@ ORDER BY id
         "#
     )
     .fetch_all(pool)
-    .await?;
+    .await
+    .map_err(|e| {
+        trace!("Database resolver connection error: {:#?}", e);
+        e
+    })?;
 
     Ok(rows)
 }
