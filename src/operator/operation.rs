@@ -5,7 +5,10 @@ use graphcast_sdk::graphcast_agent::{
 use std::sync::{mpsc, Mutex as SyncMutex};
 use tracing::{error, trace};
 
-use crate::{metrics::VALIDATED_MESSAGES, operator::RadioOperator};
+use crate::{
+    metrics::{INVALIDATED_MESSAGES, VALIDATED_MESSAGES},
+    operator::RadioOperator,
+};
 
 use super::radio_types::RadioPayloadMessage;
 
@@ -18,19 +21,20 @@ impl RadioOperator {
         sender: SyncMutex<mpsc::Sender<GraphcastMessage<RadioPayloadMessage>>>,
     ) -> impl Fn(Result<GraphcastMessage<RadioPayloadMessage>, WakuHandlingError>) {
         move |msg: Result<GraphcastMessage<RadioPayloadMessage>, WakuHandlingError>| {
-            // TODO: Handle the error case by incrementing a Prometheus "error" counter
-            if let Ok(msg) = msg {
-                trace!(msg = tracing::field::debug(&msg), "Received message");
-                let id: String = msg.identifier.clone();
-                VALIDATED_MESSAGES.with_label_values(&[&id]).inc();
-                match sender.lock().unwrap().send(msg) {
-                    //TODO: Compare if the message should be stored here or when it gets to the receiver
-                    //Probably the receiver as the handler is limited
-                    Ok(_) => trace!("Sent received message to radio operator"),
-                    Err(e) => error!("Could not send message to channel, {:#?}", e),
-                };
-            } else {
-                trace!(msg = tracing::field::debug(&msg), "Invalid message");
+            match msg {
+                Ok(msg) => {
+                    trace!(msg = tracing::field::debug(&msg), "Received message");
+                    let id: String = msg.identifier.clone();
+                    VALIDATED_MESSAGES.with_label_values(&[&id]).inc();
+                    match sender.lock().unwrap().send(msg) {
+                        Ok(_) => trace!("Sent received message to radio operator"),
+                        Err(e) => error!("Could not send message to channel, {:#?}", e),
+                    };
+                }
+                Err(e) => {
+                    INVALIDATED_MESSAGES.with_label_values(&[e.type_string()]).inc();
+                    trace!(msg = tracing::field::debug(&e), "Invalid message");
+                }
             }
         }
     }

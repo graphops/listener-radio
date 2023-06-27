@@ -19,7 +19,22 @@ pub static VALIDATED_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
     )
     .expect("Failed to create validated_messages counters");
     prometheus::register(Box::new(m.clone()))
-        .expect("Failed to register validated_messages counter");
+        .expect("Failed to register validated_messages counters");
+    m
+});
+
+// Received invalid messages counter
+#[allow(dead_code)]
+pub static INVALIDATED_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
+    let m = IntCounterVec::new(
+        Opts::new("invalid_messages", "Number of invalid messages received")
+            .namespace("graphcast")
+            .subsystem("poi_radio"),
+            &["error_type"],
+    )
+    .expect("Failed to create invalid_messages counters");
+    prometheus::register(Box::new(m.clone()))
+        .expect("Failed to register invalid_messages counters");
     m
 });
 
@@ -71,6 +86,7 @@ pub fn start_metrics() {
         &REGISTRY,
         vec![
             Box::new(VALIDATED_MESSAGES.clone()),
+            Box::new(INVALIDATED_MESSAGES.clone()),
             Box::new(CACHED_MESSAGES.clone()),
             Box::new(ACTIVE_INDEXERS.clone()),
         ],

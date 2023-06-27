@@ -11,8 +11,8 @@ use tracing::{debug, info, trace, warn};
 use graphcast_sdk::{
     build_wallet,
     graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent},
-    graphcast_id_address,
-    graphql::client_registry::query_registry_indexer,
+    wallet_address,
+    graphql::client_registry::query_registry,
 };
 
 use crate::config::Config;
@@ -51,9 +51,9 @@ impl RadioOperator {
         .expect("Radio operator cannot build wallet");
         // The query here must be Ok but so it is okay to panic here
         // Alternatively, make validate_set_up return wallet, address, and stake
-        let indexer_address = query_registry_indexer(
+        let indexer_address = query_registry(
             config.registry_subgraph.to_string(),
-            graphcast_id_address(&wallet),
+            wallet_address(&wallet),
         )
         .await
         .expect("Radio operator registered to indexer");
