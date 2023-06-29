@@ -4,6 +4,7 @@ on:
   release:
     types: [published]
   push:
+    branches: [dev]
     tags:
       - "*.*.*"
 
@@ -14,10 +15,9 @@ env:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
-
     services:
       postgres:
-        image: postgres:14
+        image: postgres
         env:
           POSTGRES_PASSWORD: password
         options: >-
@@ -29,15 +29,10 @@ jobs:
           - 5432:5432
     env:
       DATABASE_URL: postgresql://postgres:password@localhost:5432/3la-test
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Setup Database
-      run: |
-        cargo install sqlx-cli --features postgres
-        sqlx db setup
 
       - name: Docker meta
         id: meta
@@ -72,12 +67,21 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - name: Migrate database
+      - name: Setup database
         env:
           DATABASE_URL: postgres://postgres:password@localhost:5432/3la-test
-        run: |
-          cargo install --version=0.2.0 sqlx-cli --no-default-features --features postgres
-          sqlx database create
+        run: cargo install sqlx-cli --no-default-features  --features native-tls,postgres  && cargo sqlx prepare --check
+
+      - name: Database create
+        env:
+          DATABASE_URL: postgres://postgres:password@localhost:5432/3la-test
+        run: sqlx database create
+      
+      - name: Database migrate
+        env:
+          DATABASE_URL: postgres://postgres:password@localhost:5432/3la-test
+        run: sqlx migrate run
+      
       - uses: actions-rs/cargo@v1
         with:
           command: test

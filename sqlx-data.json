@@ -1,0 +1,123 @@
+{
+  "db": "PostgreSQL",
+  "05ad2dc48dd493d208d82a742a9728069d3bcd0de3e9f11802a073758a28c7ae": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Jsonb"
+        ]
+      }
+    },
+    "query": "\nINSERT INTO messages ( message )\nVALUES ( $1 )\nRETURNING id\n        "
+  },
+  "54e196555f1c47f0202b8927a590b764a8b700622840b5b33c74217fde8e9941": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        },
+        {
+          "name": "message: Json<T>",
+          "ordinal": 1,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\nSELECT id, message as \"message: Json<T>\"\nFROM messages\nORDER BY id\n        "
+  },
+  "6d9ce07dae20c56557f5597f62cb679b27399090a88e29300d7ff5ab8a7765cd": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        },
+        {
+          "name": "message: Json<T>",
+          "ordinal": 1,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int8"
+        ]
+      }
+    },
+    "query": "\nSELECT id, message as \"message: Json<T>\"\nFROM messages\nWHERE id = $1\n        "
+  },
+  "95a284f4316ab619d0ed05dff392cca44fe4f76d12cce60b28bb185277200e70": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        },
+        {
+          "name": "message: Json<T>",
+          "ordinal": 1,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\nDELETE\nFROM messages\nRETURNING id, message as \"message: Json<T>\"\n        "
+  },
+  "c584842bb0b2dbe90e2a0888b08327ad5fd3ecbcc331828e12abe7680ca54462": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int8"
+        },
+        {
+          "name": "message: Json<T>",
+          "ordinal": 1,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int8"
+        ]
+      }
+    },
+    "query": "\nDELETE\nFROM messages\nWHERE id = $1\nRETURNING id, message as \"message: Json<T>\"\n        "
+  }
+}

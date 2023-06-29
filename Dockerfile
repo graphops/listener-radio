@@ -18,8 +18,10 @@ COPY . /graphcast-3la
 WORKDIR /graphcast-3la
 
 RUN sh install-golang.sh
-ENV DATABASE_URL=postgres://postgres:postgres@localhost:5432/test_3la
-RUN echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/test_3la" > .env
+ARG SQLX_OFFLINE=true
+ARG DATABASE_URL=postgresql://postgres:password@localhost:5432/3la-test
+RUN echo "DATABASE_URL=postgresql://postgres:password@localhost:5432/3la-test" > .env
+RUN ls
 ENV PATH=$PATH:/usr/local/go/bin
 
 RUN cargo build --release

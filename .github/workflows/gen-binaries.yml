@@ -3,10 +3,26 @@ name: Build and upload release binaries
 on:
   release:
     types: [published]
+  # push:
+  #   branches: [dev]
 
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/3la-test
 
     steps:
       - uses: actions/checkout@v3
@@ -24,9 +40,27 @@ jobs:
             sudo tar -C /usr/local -xzf go1.19.5.linux-amd64.tar.gz
           fi
           export PATH=$PATH:/usr/local/go/bin
+      
+      - name: Setup Database
+        env:
+          DATABASE_URL: postgres://postgres:password@localhost:5432/3la-test
+        run: cargo install sqlx-cli --no-default-features  --features native-tls,postgres && cargo sqlx prepare --check
+      
+      - name: Database create
+        env:
+          DATABASE_URL: postgres://postgres:password@localhost:5432/3la-test
+        run: sqlx database create
+        
+      - name: Database migrate
+        env:
+          DATABASE_URL: postgres://postgres:password@localhost:5432/3la-test
+        run: sqlx migrate run
+
       - name: Build release binary
         run: |
+          export DATABASE_URL=postgres://postgres:password@localhost:5432/3la-test
           cargo build --release
+
       - name: Upload Ubuntu binary
         uses: actions/upload-release-asset@v1.0.2
         env:
@@ -35,27 +69,4 @@ jobs:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: ./target/release/graphcast-3la
           asset_name: graphcast-3la-${{ github.event.release.tag_name }}-ubuntu
-          asset_content_type: binary/octet-stream
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - uses: actions/setup-go@v4
-        with:
-          go-version: "1.19.5"
-      - name: Build release binary
-        run: |
-          cargo build --release
-      - name: Upload MacOS binary
-        uses: actions/upload-release-asset@v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./target/release/graphcast-3la
-          asset_name: graphcast-3la-${{ github.event.release.tag_name }}-macos
           asset_content_type: binary/octet-stream
