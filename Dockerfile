@@ -18,9 +18,11 @@ COPY . /graphcast-3la
 WORKDIR /graphcast-3la
 
 RUN sh install-golang.sh
+ENV DATABASE_URL=postgres://postgres:postgres@localhost:5432/test_3la
+RUN echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/test_3la" > .env
 ENV PATH=$PATH:/usr/local/go/bin
 
-RUN cargo build --release -p graphcast-3la
+RUN cargo build --release
 
 FROM alpine:3.17.3 as alpine
 RUN set -x \
