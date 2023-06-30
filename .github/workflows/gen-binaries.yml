@@ -43,22 +43,22 @@ jobs:
       
       - name: Setup Database
         env:
-          DATABASE_URL: postgres://postgres:password@localhost:5432/3la-test
-        run: cargo install sqlx-cli --no-default-features  --features native-tls,postgres && cargo sqlx prepare --check
+          DATABASE_URL: postgres://postgres:password@localhost:5432/postgres
+        run: cargo install sqlx-cli --no-default-features  --features native-tls,postgres
       
       - name: Database create
         env:
-          DATABASE_URL: postgres://postgres:password@localhost:5432/3la-test
+          DATABASE_URL: postgres://postgres:password@localhost:5432/postgres
         run: sqlx database create
         
       - name: Database migrate
         env:
-          DATABASE_URL: postgres://postgres:password@localhost:5432/3la-test
+          DATABASE_URL: postgres://postgres:password@localhost:5432/postgres
         run: sqlx migrate run
 
       - name: Build release binary
         run: |
-          export DATABASE_URL=postgres://postgres:password@localhost:5432/3la-test
+          export DATABASE_URL=postgres://postgres:password@localhost:5432/postgres
           cargo build --release
 
       - name: Upload Ubuntu binary
