@@ -3,8 +3,8 @@ name: Build and upload release binaries
 on:
   release:
     types: [published]
-  # push:
-  #   branches: [dev]
+  push:
+    branches: [dev]
 
 jobs:
   build-linux:

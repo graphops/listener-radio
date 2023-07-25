@@ -8,18 +8,15 @@ use graphcast_sdk::{
     build_wallet,
     callbook::CallBook,
     graphcast_agent::{
-        message_typing::IdentityValidation, GraphcastAgent, GraphcastAgentConfig,
-        GraphcastAgentError,
+        message_typing::IdentityValidation, GraphcastAgentConfig, GraphcastAgentError,
     },
-    graphql::{
-        client_network::query_network_subgraph, client_registry::query_registry, QueryError,
-    },
+    graphql::QueryError,
     init_tracing, wallet_address,
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::{active_allocation_hashes, syncing_deployment_hashes};
+use crate::active_allocation_hashes;
 
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Deserialize, Default)]
 pub enum CoverageLevel {
@@ -57,13 +54,6 @@ pub struct Config {
         help = "Graph account corresponding to Graphcast operator"
     )]
     pub indexer_address: String,
-    #[clap(
-        long,
-        value_name = "ENDPOINT",
-        env = "GRAPH_NODE_STATUS_ENDPOINT",
-        help = "API endpoint to the Graph Node Status Endpoint"
-    )]
-    pub graph_node_endpoint: String,
     #[clap(
         long,
         value_name = "KEY",
@@ -299,7 +289,7 @@ pub struct Config {
         registered-indexer: must be registered at Graphcast Registry, correspond to and Indexer statisfying indexer minimum stake requirement, \n
         indexer: must be registered at Graphcast Registry or is a Graph Account, correspond to and Indexer statisfying indexer minimum stake requirement"
     )]
-    pub id_validation: Option<IdentityValidation>,
+    pub id_validation: IdentityValidation,
 }
 
 impl Config {
@@ -345,7 +335,8 @@ impl Config {
             self.radio_name.clone(),
             self.registry_subgraph.clone(),
             self.network_subgraph.clone(),
-            self.graph_node_endpoint.clone(),
+            self.id_validation.clone(),
+            None,
             Some(self.boot_node_addresses.clone()),
             Some(self.graphcast_network.to_owned()),
             Some(topics),
@@ -356,81 +347,32 @@ impl Config {
             self.filter_protocol,
             self.discv5_enrs.clone(),
             self.discv5_port,
-            self.id_validation.clone(),
         )
         .await
     }
 
-    pub async fn basic_info(&self) -> Result<(String, f32), QueryError> {
-        // Using unwrap directly as the query has been ran in the set-up validation
-        let wallet = build_wallet(
-            self.wallet_input()
-                .map_err(|e| QueryError::Other(e.into()))?,
-        )
-        .map_err(|e| QueryError::Other(e.into()))?;
-        // The query here must be Ok but so it is okay to panic here
-        // Alternatively, make validate_set_up return wallet, address, and stake
-        let my_address =
-            query_registry(self.registry_subgraph.to_string(), wallet_address(&wallet)).await?;
-        let my_stake =
-            query_network_subgraph(self.network_subgraph.to_string(), my_address.clone())
-                .await
-                .unwrap()
-                .indexer_stake();
-        info!(
-            my_address,
-            my_stake, "Initializing radio operator for indexer identity",
-        );
-        Ok((my_address, my_stake))
-    }
-
-    pub async fn create_graphcast_agent(&self) -> Result<GraphcastAgent, GraphcastAgentError> {
-        let config = self.to_graphcast_agent_config().await.unwrap();
-        GraphcastAgent::new(config).await
-    }
-
     pub fn callbook(&self) -> CallBook {
         CallBook::new(
-            self.graph_node_endpoint.clone(),
             self.registry_subgraph.clone(),
             self.network_subgraph.clone(),
+            None,
         )
     }
 
     /// Generate a set of unique topics along with given static topics
     #[autometrics]
-    pub async fn generate_topics(&self, indexer_address: String) -> Vec<String> {
+    pub async fn generate_topics(&self, indexer_address: &str) -> Vec<String> {
         let static_topics = HashSet::from_iter(self.topics().to_vec());
         let topics = match self.coverage {
             CoverageLevel::Minimal => static_topics,
-            CoverageLevel::OnChain => {
-                let mut topics: HashSet<String> = active_allocation_hashes(
-                    self.callbook().graph_network(),
-                    indexer_address.clone(),
-                )
-                .await
-                .into_iter()
-                .collect();
-                topics.extend(static_topics);
-                topics
-            }
-            CoverageLevel::Comprehensive => {
-                let active_topics: HashSet<String> = active_allocation_hashes(
-                    self.callbook().graph_network(),
-                    indexer_address.clone(),
-                )
-                .await
-                .into_iter()
-                .collect();
-                let mut additional_topics: HashSet<String> =
-                    syncing_deployment_hashes(self.graph_node_endpoint())
+            CoverageLevel::OnChain | CoverageLevel::Comprehensive => {
+                let mut topics: HashSet<String> =
+                    active_allocation_hashes(self.callbook().graph_network(), indexer_address)
                         .await
                         .into_iter()
                         .collect();
-
-                additional_topics.extend(active_topics);
-                additional_topics.extend(static_topics);
-                additional_topics
+                topics.extend(static_topics);
+                topics
             }
         };
         topics.into_iter().collect::<Vec<String>>()

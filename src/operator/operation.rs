@@ -5,10 +5,7 @@ use graphcast_sdk::graphcast_agent::{
 use std::sync::{mpsc, Mutex as SyncMutex};
 use tracing::{error, trace};
 
-use crate::{
-    metrics::{INVALIDATED_MESSAGES, VALIDATED_MESSAGES},
-    operator::RadioOperator,
-};
+use crate::{metrics::INVALIDATED_MESSAGES, metrics::VALIDATED_MESSAGES, operator::RadioOperator};
 
 use super::radio_types::RadioPayloadMessage;
 
@@ -32,7 +29,7 @@ impl RadioOperator {
             }
             Err(e) => {
                 INVALIDATED_MESSAGES
-                    .with_label_values(&[e.type_string()])
+                    .with_label_values(&[&e.to_string()])
                     .inc();
                 trace!(msg = tracing::field::debug(&e), "Invalid message");
             }
