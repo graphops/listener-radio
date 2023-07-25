@@ -2,7 +2,7 @@
 set -e
 set -x
 
-VERSION="$(cargo metadata --quiet --format-version 1 | jq -r '.packages[] | select(.name == "graphcast-3la") | .version')"
+VERSION="$(cargo metadata --quiet --format-version 1 | jq -r '.packages[] | select(.name == "listener-radio") | .version')"
 
 if [[ -z "$VERSION" ]]; then
   echo "Usage: $0 <version>"

@@ -1,7 +1,7 @@
 
-# Contributing to Graphcast 3LA
+# Contributing to Graphcast Listener Radio
 
-Welcome to Graphcast 3LA! Thanks a ton for your interest in contributing.
+Welcome to Graphcast Listener Radio! Thanks a ton for your interest in contributing.
 
 If you run into any problems feel free to create an issue. PRs are much appreciated for simple things. If it's something more complex we'd appreciate having a quick chat in GitHub Issues or the Graph Discord server.
 

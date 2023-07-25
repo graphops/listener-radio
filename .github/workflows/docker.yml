@@ -10,7 +10,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  BASE_NAME: graphops/graphcast-3la
+  BASE_NAME: graphops/listener-radio
 
 jobs:
   build-linux:

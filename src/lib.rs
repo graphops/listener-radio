@@ -32,7 +32,7 @@ pub mod server;
 pub static GRAPHCAST_AGENT: OnceCell<Arc<GraphcastAgent>> = OnceCell::new();
 
 pub fn radio_name() -> &'static str {
-    "graphcast-3la"
+    "listener-radio"
 }
 
 /// Generate default topics that is operator address resolved to indexer address

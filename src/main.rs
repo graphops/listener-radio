@@ -1,5 +1,5 @@
 use dotenv::dotenv;
-use graphcast_3la::{config::Config, operator::RadioOperator};
+use listener_radio::{config::Config, operator::RadioOperator};
 
 #[tokio::main]
 async fn main() {
