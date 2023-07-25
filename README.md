@@ -1,6 +1,6 @@
-# Graphcast 3LA
+# Graphcast Listener Radio
 
-[![Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.graphops.xyz/graphcast/radios/graphcast-3la)
+[![Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.graphops.xyz/graphcast/radios/3la-monitor)
 
 ## Introduction
 
@@ -12,7 +12,7 @@ This radio monitors Graphcast network through subscribing to gossip network topi
 - Set Postgres url to `DATABASE_URL` in `.env`
 - Set general GraphcastAgent environmental variables. Check SDK docs and cli help for specifics. Here is a brief list of required/recommended settings 
   - wallet_key: Graphcast id,
-  - graph_node_endpoint: this is required for GraphcastAgent but can later be abstracted as it is not used in 3la operations,
+  - graph_node_endpoint: this is required for GraphcastAgent but can later be abstracted as it is not used in Listener Radio operations,
   - graphcast_namespace: choose which graphcast network to listen ('mainnet', 'testnet'),
 - `cargo run` from source code or build docker image
 

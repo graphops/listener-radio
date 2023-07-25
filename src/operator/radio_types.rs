@@ -5,7 +5,7 @@ use ethers_derive_eip712::*;
 use prost::Message;
 use serde::{Deserialize, Serialize};
 
-// Specifically support a list of radios for 3la to instruct how to read the radio message types
+// Specifically support a list of radios for listener-radio to instruct how to read the radio message types
 // and derive eip712 types to support signature encoding and decoding of the payload message.
 // EIP-712 name will change encoding, append other unique message types/names to decode properly
 #[derive(Eip712, EthAbiType, Clone, Message, Serialize, Deserialize, PartialEq, SimpleObject)]

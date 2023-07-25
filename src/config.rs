@@ -28,7 +28,7 @@ pub enum CoverageLevel {
 
 #[derive(Clone, Debug, Parser, Serialize, Deserialize, Getters, Default)]
 #[clap(
-    name = "graphcast-3la",
+    name = "listener-radio",
     about = "Listen and store all messages on Graphcast network in real time",
     author = "GraphOps"
 )]
