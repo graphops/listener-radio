@@ -1,8 +1,6 @@
 use dotenv::dotenv;
 use graphcast_3la::{config::Config, operator::RadioOperator};
 
-extern crate partial_application;
-
 #[tokio::main]
 async fn main() {
     dotenv().ok();

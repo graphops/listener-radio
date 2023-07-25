@@ -8,7 +8,7 @@ use prometheus::{IntCounterVec, IntGauge, Opts};
 use std::{net::SocketAddr, str::FromStr};
 use tracing::{debug, info};
 
-// Received (and validated) messages counter
+/// Received (and validated) messages counter
 #[allow(dead_code)]
 pub static VALIDATED_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
     let m = IntCounterVec::new(
@@ -23,7 +23,7 @@ pub static VALIDATED_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
     m
 });
 
-// Received invalid messages counter
+/// Received invalid messages counter
 #[allow(dead_code)]
 pub static INVALIDATED_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
     let m = IntCounterVec::new(
@@ -38,7 +38,7 @@ pub static INVALIDATED_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
     m
 });
 
-// Received (and validated) messages counter
+/// Received (and validated) messages counter
 #[allow(dead_code)]
 pub static CACHED_MESSAGES: Lazy<IntGauge> = Lazy::new(|| {
     let m = IntGauge::with_opts(
@@ -50,6 +50,37 @@ pub static CACHED_MESSAGES: Lazy<IntGauge> = Lazy::new(|| {
     prometheus::register(Box::new(m.clone())).expect("Failed to register cached_messages guage");
     m
 });
+
+/// Number of active peers discoverable by 3la
+/// Updated periodically for the recently received messages
+#[allow(dead_code)]
+pub static ACTIVE_PEERS: Lazy<IntGauge> = Lazy::new(|| {
+    let m = IntGauge::with_opts(
+        Opts::new(
+            "active_peers",
+            "Number of discoverable active peers on network",
+        )
+        .namespace("graphcast")
+        .subsystem("3la"),
+    )
+    .expect("Failed to create active_peers gauges");
+    prometheus::register(Box::new(m.clone())).expect("Failed to register active_peers guage");
+    m
+});
+
+// /// Number of content topics with traffic
+// /// Updated periodically for the recently received messages
+// #[allow(dead_code)]
+// pub static ACTIVE_CONTENT_TOPICS: Lazy<IntGauge> = Lazy::new(|| {
+//     let m = IntGauge::with_opts(
+//         Opts::new("active_content_topics", "Number of content topics being gossiped on network")
+//             .namespace("graphcast")
+//             .subsystem("3la"),
+//     )
+//     .expect("Failed to create active_content_topics gauges");
+//     prometheus::register(Box::new(m.clone())).expect("Failed to register active_content_topics guage");
+//     m
+// });
 
 #[allow(dead_code)]
 pub static REGISTRY: Lazy<prometheus::Registry> = Lazy::new(prometheus::Registry::new);
@@ -70,6 +101,7 @@ pub fn start_metrics() {
             Box::new(VALIDATED_MESSAGES.clone()),
             Box::new(INVALIDATED_MESSAGES.clone()),
             Box::new(CACHED_MESSAGES.clone()),
+            Box::new(ACTIVE_PEERS.clone()),
         ],
     );
 }

@@ -1,10 +1,9 @@
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex as SyncMutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tokio::sync::Mutex as AsyncMutex;
 use tokio::time::{interval, sleep, timeout};
 use tracing::{debug, info, warn};
 
@@ -17,7 +16,8 @@ use graphcast_sdk::{
 
 use crate::config::Config;
 use crate::db::resolver::{add_message, list_messages};
-use crate::metrics::{handle_serve_metrics, CACHED_MESSAGES};
+use crate::message_types::{PublicPoiMessage, SimpleMessage, VersionUpgradeMessage};
+use crate::metrics::{handle_serve_metrics, ACTIVE_PEERS, CACHED_MESSAGES};
 use crate::operator::radio_types::RadioPayloadMessage;
 use crate::server::run_server;
 use crate::GRAPHCAST_AGENT;
@@ -51,20 +51,16 @@ impl RadioOperator {
         .expect("Radio operator cannot build wallet");
         // The query here must be Ok but so it is okay to panic here
         // Alternatively, make validate_set_up return wallet, address, and stake
-        let indexer_address = query_registry(
-            config.registry_subgraph.to_string(),
-            wallet_address(&wallet),
-        )
-        .await
-        .expect("Radio operator registered to indexer");
+        let indexer_address = query_registry(&config.registry_subgraph, &wallet_address(&wallet))
+            .await
+            .expect("Radio operator registered to indexer");
 
         debug!("Initializing Graphcast Agent");
-        let graphcast_agent = Arc::new(
-            config
-                .create_graphcast_agent()
+        let (agent, receiver) =
+            GraphcastAgent::new(config.to_graphcast_agent_config().await.unwrap())
                 .await
-                .expect("Initialize Graphcast agent"),
-        );
+                .expect("Initialize Graphcast agent");
+        let graphcast_agent = Arc::new(agent);
         debug!("Set global static instance of graphcast_agent");
         _ = GRAPHCAST_AGENT.set(graphcast_agent.clone());
 
@@ -84,6 +80,40 @@ impl RadioOperator {
             .run(&db)
             .await
             .expect("Could not run migration");
+
+        let agent_ref = graphcast_agent.clone();
+        let db_ref = db.clone();
+        thread::spawn(move || {
+            tokio::runtime::Runtime::new().unwrap().block_on(async {
+                for msg in receiver {
+                    if let Ok(msg) = agent_ref.decode::<PublicPoiMessage>(msg.payload()).await {
+                        if let Err(e) = add_message(&db_ref, msg).await {
+                            warn!(
+                                err = tracing::field::debug(&e),
+                                "Failed to store public POI message"
+                            );
+                        };
+                    } else if let Ok(msg) = agent_ref
+                        .decode::<VersionUpgradeMessage>(msg.payload())
+                        .await
+                    {
+                        if let Err(e) = add_message(&db_ref, msg).await {
+                            warn!(
+                                err = tracing::field::debug(&e),
+                                "Failed to store version upgrade message"
+                            );
+                        };
+                    } else if let Ok(msg) = agent_ref.decode::<SimpleMessage>(msg.payload()).await {
+                        if let Err(e) = add_message(&db_ref, msg).await {
+                            warn!(
+                                err = tracing::field::debug(&e),
+                                "Failed to store simple test message"
+                            );
+                        };
+                    }
+                }
+            })
+        });
 
         debug!("Initialized Radio Operator");
         RadioOperator {
@@ -106,10 +136,7 @@ impl RadioOperator {
 
         if let Some(true) = self.config.filter_protocol {
             // Provide generated topics to Graphcast agent
-            let topics = self
-                .config
-                .generate_topics(self.indexer_address.clone())
-                .await;
+            let topics = self.config.generate_topics(&self.indexer_address).await;
             debug!(
                 topics = tracing::field::debug(&topics),
                 "Found content topics for subscription",
@@ -119,28 +146,11 @@ impl RadioOperator {
                 .await;
         }
 
-        let (sender, receiver) = mpsc::channel::<GraphcastMessage<RadioPayloadMessage>>();
-        let handler = RadioOperator::radio_msg_handler(SyncMutex::new(sender));
         GRAPHCAST_AGENT
             .get()
             .unwrap()
-            .register_handler(Arc::new(AsyncMutex::new(handler)))
+            .register_handler()
             .expect("Could not register handler");
-
-        let db = self.db.clone();
-        thread::spawn(move || {
-            tokio::runtime::Runtime::new().unwrap().block_on(async {
-                for msg in receiver {
-                    info!(
-                        "Radio operator received a validated message from Graphcast agent: {:#?}",
-                        msg
-                    );
-                    if let Err(e) = add_message(&db, msg).await {
-                        warn!(err = tracing::field::debug(&e), "Failed to store message");
-                    };
-                }
-            })
-        });
     }
 
     pub fn graphcast_agent(&self) -> &GraphcastAgent {
@@ -188,8 +198,11 @@ impl RadioOperator {
                         // Update topic subscription
                         let result = timeout(update_timeout,
                             self.graphcast_agent()
-                            .update_content_topics(self.config.generate_topics(self.indexer_address.clone()).await)
+                            .update_content_topics(self.config.generate_topics(&self.indexer_address).await)
                         ).await;
+
+                        ACTIVE_PEERS
+                            .set(self.graphcast_agent.number_of_peers().try_into().unwrap());
 
                         if result.is_err() {
                             warn!("update_content_topics timed out");
