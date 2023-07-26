@@ -2,6 +2,12 @@
 name = "listener-radio"
 version = "0.0.1"
 edition = "2021"
+authors = ["GraphOps (hopeyen)"]
+description = "Listener Radio monitors on a Graphcast network and stores messages"
+license = "Apache-2.0"
+repository = "https://github.com/graphops/listener-radio"
+keywords = ["graphprotocol", "data-integrity", "Indexer", "waku", "p2p"]
+categories = ["network-programming", "web-programming::http-client"]
 
 [dependencies]
 graphcast-sdk = "0.4.0"

@@ -31,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - Update sdk version
 - Docker workflow fix
 - Docker and binary workflow
+- Release 0.0.1
 
 ### Refactor
 

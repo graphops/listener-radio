@@ -2,7 +2,6 @@
 .env
 .cargo
 /target
-/Cargo.lock
 /.idea
 /.fleet
 /.vscode
