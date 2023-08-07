@@ -33,11 +33,14 @@ RUN set -x \
 COPY --from=build-image /listener-radio/target/release/listener-radio /listener-radio/target/release/listener-radio
 RUN upx --overlay=strip --best /listener-radio/target/release/listener-radio
 
-FROM gcr.io/distroless/cc AS runtime
-COPY --from=build-image /usr/share/zoneinfo /usr/share/zoneinfo
-COPY --from=build-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build-image /etc/passwd /etc/passwd
-COPY --from=build-image /etc/group /etc/group
-COPY --from=alpine /usr/bin/dumb-init /usr/bin/dumb-init
-COPY --from=alpine "/listener-radio/target/release/listener-radio" "/usr/local/bin/listener-radio"
+RUN mv "/listener-radio/target/release/listener-radio" "/usr/local/bin/listener-radio"
+
+# Commented out because we need a shell in the container in order to do the p2pNodePort magic in Kubernetes
+# FROM gcr.io/distroless/cc AS runtime
+# COPY --from=build-image /usr/share/zoneinfo /usr/share/zoneinfo
+# COPY --from=build-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# COPY --from=build-image /etc/passwd /etc/passwd
+# COPY --from=build-image /etc/group /etc/group
+# COPY --from=alpine /usr/bin/dumb-init /usr/bin/dumb-init
+# COPY --from=alpine "/listener-radio/target/release/listener-radio" "/usr/local/bin/listener-radio"
 ENTRYPOINT [ "/usr/bin/dumb-init", "--", "/usr/local/bin/listener-radio" ]
