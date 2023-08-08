@@ -14,7 +14,6 @@ use crate::{
         model::{build_schema, RadioContext},
         routes::{graphql_handler, graphql_playground, health},
     },
-    shutdown_signal,
 };
 
 pub mod model;
@@ -24,7 +23,7 @@ pub mod routes;
 /// Set up the routes for a radio health endpoint at `/health`
 /// and a versioned GraphQL endpoint at `api/v1/graphql`
 /// This function starts a API server at the configured server_host and server_port
-pub async fn run_server(config: Config, db: Pool<Postgres>, running_program: Arc<AtomicBool>) {
+pub async fn run_server(config: Config, db: Pool<Postgres>, _running_program: Arc<AtomicBool>) {
     if config.server_port().is_none() {
         return;
     }
@@ -52,7 +51,7 @@ pub async fn run_server(config: Config, db: Pool<Postgres>, running_program: Arc
     );
     Server::bind(&addr)
         .serve(app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal(running_program))
+        // .with_graceful_shutdown(shutdown_signal(running_program))
         .await
         .unwrap();
 }

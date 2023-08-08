@@ -14,7 +14,7 @@ pub static VALIDATED_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
     let m = IntCounterVec::new(
         Opts::new("validated_messages", "Number of validated messages")
             .namespace("graphcast")
-            .subsystem("listener-radio"),
+            .subsystem("listener_radio"),
         &["deployment"],
     )
     .expect("Failed to create validated_messages counters");
@@ -29,7 +29,7 @@ pub static INVALIDATED_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
     let m = IntCounterVec::new(
         Opts::new("invalid_messages", "Number of invalid messages received")
             .namespace("graphcast")
-            .subsystem("listener-radio"),
+            .subsystem("listener_radio"),
         &["error_type"],
     )
     .expect("Failed to create invalid_messages counters");
@@ -44,7 +44,7 @@ pub static CACHED_MESSAGES: Lazy<IntGauge> = Lazy::new(|| {
     let m = IntGauge::with_opts(
         Opts::new("cached_messages", "Number of messages in cache")
             .namespace("graphcast")
-            .subsystem("listener-radio"),
+            .subsystem("listener_radio"),
     )
     .expect("Failed to create cached_messages gauges");
     prometheus::register(Box::new(m.clone())).expect("Failed to register cached_messages guage");
@@ -61,7 +61,7 @@ pub static ACTIVE_PEERS: Lazy<IntGauge> = Lazy::new(|| {
             "Number of discoverable active peers on network",
         )
         .namespace("graphcast")
-        .subsystem("listener-radio"),
+        .subsystem("listener_radio"),
     )
     .expect("Failed to create active_peers gauges");
     prometheus::register(Box::new(m.clone())).expect("Failed to register active_peers guage");
@@ -75,7 +75,7 @@ pub static ACTIVE_PEERS: Lazy<IntGauge> = Lazy::new(|| {
 //     let m = IntGauge::with_opts(
 //         Opts::new("active_content_topics", "Number of content topics being gossiped on network")
 //             .namespace("graphcast")
-//             .subsystem("listener-radio"),
+//             .subsystem("listener_radio"),
 //     )
 //     .expect("Failed to create active_content_topics gauges");
 //     prometheus::register(Box::new(m.clone())).expect("Failed to register active_content_topics guage");

@@ -1,6 +1,3 @@
-use std::collections::HashSet;
-
-use autometrics::autometrics;
 use clap::Parser;
 use derive_getters::Getters;
 use ethers::signers::WalletError;
@@ -11,12 +8,10 @@ use graphcast_sdk::{
         message_typing::IdentityValidation, GraphcastAgentConfig, GraphcastAgentError,
     },
     graphql::QueryError,
-    init_tracing, wallet_address,
+    init_tracing, wallet_address, GraphcastNetworkName, LogFormat,
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
-
-use crate::active_allocation_hashes;
 
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Deserialize, Default)]
 pub enum CoverageLevel {
@@ -53,7 +48,7 @@ pub struct Config {
         env = "INDEXER_ADDRESS",
         help = "Graph account corresponding to Graphcast operator"
     )]
-    pub indexer_address: String,
+    pub indexer_address: Option<String>,
     #[clap(
         long,
         value_name = "KEY",
@@ -90,13 +85,12 @@ pub struct Config {
     pub network_subgraph: String,
     #[clap(
         long,
+        value_name = "GRAPHCAST_NETWORK",
         default_value = "testnet",
-        value_name = "NAME",
         env = "GRAPHCAST_NETWORK",
-        help = "Supported Graphcast networks: mainnet, testnet",
-        possible_values = ["testnet", "mainnet"]
+        help = "Supported Graphcast networks: mainnet, testnet"
     )]
-    pub graphcast_network: String,
+    pub graphcast_network: GraphcastNetworkName,
     #[clap(
         long,
         value_name = "[TOPIC]",
@@ -105,27 +99,6 @@ pub struct Config {
         help = "Comma separated static list of content topics to subscribe to (Static list to include)"
     )]
     pub topics: Vec<String>,
-    #[clap(
-        long,
-        value_name = "COVERAGE",
-        value_enum,
-        default_value = "on-chain",
-        env = "COVERAGE",
-        help = "Toggle for topic coverage level",
-        long_help = "Topic coverage level\ncomprehensive: Subscribe to on-chain topics, user defined static topics, and additional topics\n
-            on-chain: Subscribe to on-chain topics and user defined static topics\nminimal: Only subscribe to user defined static topics.\n
-            Default is set to on-chain coverage"
-    )]
-    pub coverage: CoverageLevel,
-    #[clap(
-        long,
-        min_values = 0,
-        default_value = "120",
-        value_name = "COLLECT_MESSAGE_DURATION",
-        env = "COLLECT_MESSAGE_DURATION",
-        help = "Set the minimum duration to wait for a topic message collection"
-    )]
-    pub collect_message_duration: i64,
     #[clap(
         long,
         value_name = "WAKU_HOST",
@@ -263,10 +236,9 @@ pub struct Config {
         env = "LOG_FORMAT",
         help = "Support logging formats: pretty, json, full, compact",
         long_help = "pretty: verbose and human readable; json: not verbose and parsable; compact:  not verbose and not parsable; full: verbose and not parsible",
-        possible_values = ["pretty", "json", "full", "compact"],
         default_value = "pretty"
     )]
-    pub log_format: String,
+    pub log_format: LogFormat,
     // This is only used when filtering for specific radios
     #[clap(
         long,
@@ -280,6 +252,7 @@ pub struct Config {
         value_name = "ID_VALIDATION",
         value_enum,
         env = "ID_VALIDATION",
+        default_value = "valid-address",
         help = "Identity validaiton mechanism for message signers",
         long_help = "Identity validaiton mechanism for message signers\n
         no-check: all messages signer is valid, \n
@@ -299,7 +272,7 @@ impl Config {
         let config = Config::parse();
         std::env::set_var("RUST_LOG", config.log_level.clone());
         // Enables tracing under RUST_LOG variable
-        init_tracing(config.log_format.clone()).expect("Could not set up global default subscriber for logger, check environmental variable `RUST_LOG` or the CLI input `log-level`");
+        init_tracing(config.log_format.to_string()).expect("Could not set up global default subscriber for logger, check environmental variable `RUST_LOG` or the CLI input `log-level`");
         config
     }
 
@@ -331,14 +304,14 @@ impl Config {
 
         GraphcastAgentConfig::new(
             wallet_key,
-            self.indexer_address.clone(),
+            self.indexer_address.clone().unwrap_or("none".to_string()),
             self.radio_name.clone(),
             self.registry_subgraph.clone(),
             self.network_subgraph.clone(),
             self.id_validation.clone(),
             None,
             Some(self.boot_node_addresses.clone()),
-            Some(self.graphcast_network.to_owned()),
+            Some(self.graphcast_network.to_string()),
             Some(topics),
             self.waku_node_key.clone(),
             self.waku_host.clone(),
@@ -357,25 +330,6 @@ impl Config {
             self.network_subgraph.clone(),
             None,
         )
-    }
-
-    /// Generate a set of unique topics along with given static topics
-    #[autometrics]
-    pub async fn generate_topics(&self, indexer_address: &str) -> Vec<String> {
-        let static_topics = HashSet::from_iter(self.topics().to_vec());
-        let topics = match self.coverage {
-            CoverageLevel::Minimal => static_topics,
-            CoverageLevel::OnChain | CoverageLevel::Comprehensive => {
-                let mut topics: HashSet<String> =
-                    active_allocation_hashes(self.callbook().graph_network(), indexer_address)
-                        .await
-                        .into_iter()
-                        .collect();
-                topics.extend(static_topics);
-                topics
-            }
-        };
-        topics.into_iter().collect::<Vec<String>>()
     }
 }
 

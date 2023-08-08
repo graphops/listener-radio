@@ -10,13 +10,13 @@ keywords = ["graphprotocol", "data-integrity", "Indexer", "waku", "p2p"]
 categories = ["network-programming", "web-programming::http-client"]
 
 [dependencies]
-graphcast-sdk = "0.4.0"
+graphcast-sdk = { git = "https://github.com/graphops/graphcast-sdk/" }
 anyhow = "1.0"
 axum = { version = "0.5", features = ["headers"] }
 async-graphql = "4.0.16"
 async-graphql-axum = "4.0.16"
 autometrics = { version = "0.3.3", features = ["prometheus-exporter"] }
-clap = { version = "3.2.25", features = ["derive", "env"] }
+clap = { version = "4.3.1", features = ["derive", "env"] }
 derive-getters = "0.2.1"
 dotenv = "0.15"
 ethers = "2.0.4"

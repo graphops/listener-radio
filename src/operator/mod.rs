@@ -7,12 +7,7 @@ use std::time::Duration;
 use tokio::time::{interval, sleep, timeout};
 use tracing::{debug, info, warn};
 
-use graphcast_sdk::{
-    build_wallet,
-    graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent},
-    graphql::client_registry::query_registry,
-    wallet_address,
-};
+use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent};
 
 use crate::config::Config;
 use crate::db::resolver::{add_message, list_messages};
@@ -35,26 +30,12 @@ pub struct RadioOperator {
     db: Pool<Postgres>,
     graphcast_agent: Arc<GraphcastAgent>,
     notifier: Notifier,
-    indexer_address: String,
 }
 
 impl RadioOperator {
     /// Create a radio operator with radio configurations, persisted data,
     /// graphcast agent, and control flow
     pub async fn new(config: Config) -> RadioOperator {
-        debug!("Initializing Radio operator");
-        let wallet = build_wallet(
-            config
-                .wallet_input()
-                .expect("Operator wallet input invalid"),
-        )
-        .expect("Radio operator cannot build wallet");
-        // The query here must be Ok but so it is okay to panic here
-        // Alternatively, make validate_set_up return wallet, address, and stake
-        let indexer_address = query_registry(&config.registry_subgraph, &wallet_address(&wallet))
-            .await
-            .expect("Radio operator registered to indexer");
-
         debug!("Initializing Graphcast Agent");
         let (agent, receiver) =
             GraphcastAgent::new(config.to_graphcast_agent_config().await.unwrap())
@@ -121,7 +102,6 @@ impl RadioOperator {
             db,
             graphcast_agent,
             notifier,
-            indexer_address,
         }
     }
 
@@ -136,7 +116,7 @@ impl RadioOperator {
 
         if let Some(true) = self.config.filter_protocol {
             // Provide generated topics to Graphcast agent
-            let topics = self.config.generate_topics(&self.indexer_address).await;
+            let topics = self.config.topics.to_vec();
             debug!(
                 topics = tracing::field::debug(&topics),
                 "Found content topics for subscription",
@@ -198,7 +178,7 @@ impl RadioOperator {
                         // Update topic subscription
                         let result = timeout(update_timeout,
                             self.graphcast_agent()
-                            .update_content_topics(self.config.generate_topics(&self.indexer_address).await)
+                            .update_content_topics(self.config.topics.to_vec())
                         ).await;
 
                         ACTIVE_PEERS
