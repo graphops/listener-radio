@@ -1,6 +1,5 @@
 .envrc
 .env
-.cargo
 /target
 /.idea
 /.fleet
