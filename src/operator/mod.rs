@@ -1,11 +1,13 @@
+use anyhow::anyhow;
+use graphcast_sdk::WakuMessage;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Receiver;
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 use tokio::time::{interval, sleep, timeout};
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent};
 
@@ -35,14 +37,9 @@ pub struct RadioOperator {
 impl RadioOperator {
     /// Create a radio operator with radio configurations, persisted data,
     /// graphcast agent, and control flow
-    pub async fn new(config: Config) -> RadioOperator {
-        debug!("Initializing Graphcast Agent");
-        let (agent, receiver) =
-            GraphcastAgent::new(config.to_graphcast_agent_config().await.unwrap())
-                .await
-                .expect("Initialize Graphcast agent");
-        let graphcast_agent = Arc::new(agent);
+    pub async fn new(config: Config, graphcast_agent: GraphcastAgent) -> RadioOperator {
         debug!("Set global static instance of graphcast_agent");
+        let graphcast_agent = Arc::new(graphcast_agent);
         _ = GRAPHCAST_AGENT.set(graphcast_agent.clone());
 
         let notifier = Notifier::from_config(&config);
@@ -62,40 +59,6 @@ impl RadioOperator {
             .await
             .expect("Could not run migration");
 
-        let agent_ref = graphcast_agent.clone();
-        let db_ref = db.clone();
-        thread::spawn(move || {
-            tokio::runtime::Runtime::new().unwrap().block_on(async {
-                for msg in receiver {
-                    if let Ok(msg) = agent_ref.decode::<PublicPoiMessage>(msg.payload()).await {
-                        if let Err(e) = add_message(&db_ref, msg).await {
-                            warn!(
-                                err = tracing::field::debug(&e),
-                                "Failed to store public POI message"
-                            );
-                        };
-                    } else if let Ok(msg) = agent_ref
-                        .decode::<VersionUpgradeMessage>(msg.payload())
-                        .await
-                    {
-                        if let Err(e) = add_message(&db_ref, msg).await {
-                            warn!(
-                                err = tracing::field::debug(&e),
-                                "Failed to store version upgrade message"
-                            );
-                        };
-                    } else if let Ok(msg) = agent_ref.decode::<SimpleMessage>(msg.payload()).await {
-                        if let Err(e) = add_message(&db_ref, msg).await {
-                            warn!(
-                                err = tracing::field::debug(&e),
-                                "Failed to store simple test message"
-                            );
-                        };
-                    }
-                }
-            })
-        });
-
         debug!("Initialized Radio Operator");
         RadioOperator {
             config,
@@ -107,7 +70,7 @@ impl RadioOperator {
 
     /// Preparation for running the radio applications
     /// Expose metrics and subscribe to graphcast topics
-    pub async fn prepare(&self) {
+    pub async fn prepare(&self, receiver: Receiver<WakuMessage>) {
         // Set up Prometheus metrics url if configured
         if let Some(port) = self.config.metrics_port {
             debug!("Initializing metrics port");
@@ -126,6 +89,7 @@ impl RadioOperator {
                 .await;
         }
 
+        self.message_processor(receiver).await;
         GRAPHCAST_AGENT
             .get()
             .unwrap()
@@ -212,5 +176,46 @@ impl RadioOperator {
             sleep(Duration::from_secs(5)).await;
             continue;
         }
+    }
+
+    pub async fn message_processor(&self, receiver: Receiver<WakuMessage>) {
+        let agent_ref = self.graphcast_agent.clone();
+        let db_ref = self.db.clone();
+        tokio::spawn(async move {
+            for msg in receiver {
+                let timeout_duration = Duration::from_secs(1);
+                let process_res =
+                    timeout(timeout_duration, process_message(&agent_ref, &db_ref, msg)).await;
+                match process_res {
+                    Ok(Ok(r)) => trace!(msg_row_id = r, "New message added to DB"),
+                    Ok(Err(e)) => {
+                        warn!(err = tracing::field::debug(&e), "Failed to process message");
+                    }
+                    Err(e) => debug!(error = e.to_string(), "Message processor timed out"),
+                }
+            }
+        });
+    }
+}
+
+pub async fn process_message(
+    graphcast_agent: &Arc<GraphcastAgent>,
+    db: &Pool<Postgres>,
+    msg: WakuMessage,
+) -> Result<i64, anyhow::Error> {
+    if let Ok(msg) = graphcast_agent
+        .decode::<PublicPoiMessage>(msg.payload())
+        .await
+    {
+        add_message(db, msg).await
+    } else if let Ok(msg) = graphcast_agent
+        .decode::<VersionUpgradeMessage>(msg.payload())
+        .await
+    {
+        add_message(db, msg).await
+    } else if let Ok(msg) = graphcast_agent.decode::<SimpleMessage>(msg.payload()).await {
+        add_message(db, msg).await
+    } else {
+        Err(anyhow!("Message cannot be decoded"))
     }
 }
