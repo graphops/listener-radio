@@ -13,7 +13,7 @@ use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, Graphcast
 
 use crate::config::Config;
 use crate::db::resolver::{add_message, list_messages};
-use crate::message_types::{PublicPoiMessage, SimpleMessage, VersionUpgradeMessage};
+use crate::message_types::{PublicPoiMessage, SimpleMessage, UpgradeIntentMessage};
 use crate::metrics::{handle_serve_metrics, ACTIVE_PEERS, CACHED_MESSAGES};
 use crate::operator::radio_types::RadioPayloadMessage;
 use crate::server::run_server;
@@ -59,6 +59,44 @@ impl RadioOperator {
             .await
             .expect("Could not run migration");
 
+<<<<<<< Updated upstream
+=======
+        let agent_ref = graphcast_agent.clone();
+        let db_ref = db.clone();
+        thread::spawn(move || {
+            tokio::runtime::Runtime::new().unwrap().block_on(async {
+                for msg in receiver {
+                    trace!("Radio operator recevied Waku message to process");
+                    if let Ok(msg) = agent_ref.decode::<PublicPoiMessage>(msg.payload()).await {
+                        if let Err(e) = add_message(&db_ref, msg).await {
+                            warn!(
+                                err = tracing::field::debug(&e),
+                                "Failed to store public POI message"
+                            );
+                        };
+                    } else if let Ok(msg) = agent_ref
+                        .decode::<UpgradeIntentMessage>(msg.payload())
+                        .await
+                    {
+                        if let Err(e) = add_message(&db_ref, msg).await {
+                            warn!(
+                                err = tracing::field::debug(&e),
+                                "Failed to store upgrade intent message"
+                            );
+                        };
+                    } else if let Ok(msg) = agent_ref.decode::<SimpleMessage>(msg.payload()).await {
+                        if let Err(e) = add_message(&db_ref, msg).await {
+                            warn!(
+                                err = tracing::field::debug(&e),
+                                "Failed to store simple test message"
+                            );
+                        };
+                    }
+                }
+            })
+        });
+
+>>>>>>> Stashed changes
         debug!("Initialized Radio Operator");
         RadioOperator {
             config,
