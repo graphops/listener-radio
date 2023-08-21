@@ -135,6 +135,9 @@ impl RadioOperator {
             // Run event intervals sequentially by satisfication of other intervals and corresponding tick
             tokio::select! {
                 _ = network_update_interval.tick() => {
+                    let connection = network_check(&self.graphcast_agent().node_handle);
+                    debug!(network_check = tracing::field::debug(&connection), "Network condition");
+
                     if let Some(true) = self.config.filter_protocol {
                         if skip_iteration.load(Ordering::SeqCst) {
                             skip_iteration.store(false, Ordering::SeqCst);
@@ -145,8 +148,6 @@ impl RadioOperator {
                             self.graphcast_agent()
                             .update_content_topics(self.config.topics.to_vec())
                         ).await;
-                        let connection = network_check(&self.graphcast_agent().node_handle);
-                        debug!(network_check = tracing::field::debug(&connection), "Network condition");
 
                         ACTIVE_PEERS
                             .set(self.graphcast_agent.number_of_peers().try_into().unwrap());
