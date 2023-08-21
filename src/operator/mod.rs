@@ -145,7 +145,8 @@ impl RadioOperator {
                             self.graphcast_agent()
                             .update_content_topics(self.config.topics.to_vec())
                         ).await;
-                        network_check(&self.graphcast_agent().node_handle);
+                        let connection = network_check(&self.graphcast_agent().node_handle);
+                        debug!(network_check = tracing::field::debug(&connection), "Network condition");
 
                         ACTIVE_PEERS
                             .set(self.graphcast_agent.number_of_peers().try_into().unwrap());
