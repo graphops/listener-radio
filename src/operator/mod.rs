@@ -135,6 +135,7 @@ impl RadioOperator {
             // Run event intervals sequentially by satisfication of other intervals and corresponding tick
             tokio::select! {
                 _ = network_update_interval.tick() => {
+                    trace!("Network update");
                     let connection = network_check(&self.graphcast_agent().node_handle);
                     debug!(network_check = tracing::field::debug(&connection), "Network condition");
 
@@ -160,6 +161,7 @@ impl RadioOperator {
                     }
                 },
                 _ = comparison_interval.tick() => {
+                    trace!("Network update");
                     if skip_iteration.load(Ordering::SeqCst) {
                         skip_iteration.store(false, Ordering::SeqCst);
                         continue;
@@ -187,6 +189,7 @@ impl RadioOperator {
         let db_ref = self.db.clone();
         tokio::spawn(async move {
             for msg in receiver {
+                trace!("Message processing");
                 let timeout_duration = Duration::from_secs(1);
                 let process_res =
                     timeout(timeout_duration, process_message(&agent_ref, &db_ref, msg)).await;
