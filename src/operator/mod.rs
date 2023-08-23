@@ -12,13 +12,14 @@ use tracing::{debug, info, trace, warn};
 
 use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent};
 
-use crate::config::Config;
-use crate::db::resolver::{add_message, list_messages};
-use crate::message_types::{PublicPoiMessage, SimpleMessage, UpgradeIntentMessage};
-use crate::metrics::{handle_serve_metrics, ACTIVE_PEERS, CACHED_MESSAGES};
-use crate::operator::radio_types::RadioPayloadMessage;
-use crate::server::run_server;
-use crate::GRAPHCAST_AGENT;
+use crate::{config::Config,
+    db::resolver::{add_message, list_messages},
+    message_types::{PublicPoiMessage, SimpleMessage, UpgradeIntentMessage},
+    metrics::{handle_serve_metrics, ACTIVE_PEERS, CACHED_MESSAGES},
+    operator::radio_types::RadioPayloadMessage,
+    server::run_server,
+    GRAPHCAST_AGENT
+};
 
 use self::notifier::Notifier;
 
@@ -161,20 +162,25 @@ impl RadioOperator {
                     }
                 },
                 _ = comparison_interval.tick() => {
-                    trace!("Network update");
+                    trace!("Local summary update");
                     if skip_iteration.load(Ordering::SeqCst) {
                         skip_iteration.store(false, Ordering::SeqCst);
                         continue;
                     }
-                    let msgs =
-                        list_messages::<GraphcastMessage<RadioPayloadMessage>>(&self.db).await;
-                    let msg_num = &msgs.map_or(0, |m| m.len());
-                    CACHED_MESSAGES
-                        .set(*msg_num as i64);
-                    info!(total_messages = msg_num,
-                        total_topic_filters = self.graphcast_agent.content_identifiers().await.len(),
-                        "Monitoring summary"
-                    );
+                    let result = timeout(update_timeout,
+                        list_messages::<GraphcastMessage<RadioPayloadMessage>>(&self.db)
+                    ).await;
+                    
+                    match result {
+                        Err(e) => warn!(err = tracing::field::debug(e), "Summary timed out"),
+                        Ok(msgs) => {
+                            let msg_num = &msgs.map_or(0, |m| m.len());
+                            CACHED_MESSAGES.set(*msg_num as i64);
+                            info!(total_messages = msg_num,
+                                "Monitoring summary"
+                            )
+                        }
+                    }
                 },
                 else => break,
             }
