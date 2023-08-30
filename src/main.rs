@@ -5,6 +5,7 @@ use std::sync::mpsc;
 
 #[tokio::main]
 async fn main() {
+    // console_subscriber::init();
     dotenv().ok();
 
     // Parse basic configurations

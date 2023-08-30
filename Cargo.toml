@@ -10,7 +10,7 @@ keywords = ["graphprotocol", "data-integrity", "Indexer", "waku", "p2p"]
 categories = ["network-programming", "web-programming::http-client"]
 
 [dependencies]
-graphcast-sdk = { git = "https://github.com/graphops/graphcast-sdk/", branch = "hope/receiver-and-msg-type" }
+graphcast-sdk = { git = "https://github.com/graphops/graphcast-sdk/" }
 anyhow = "1.0"
 axum = { version = "0.5", features = ["headers"] }
 async-graphql = "4.0.16"
@@ -42,4 +42,7 @@ tracing-subscriber = { version = "0.3", features = [
     "std",
     "json",
 ] }
-tokio = { version = "1.28.1", features = ["full", "rt"] }
+tokio = { version = "1.28.1", features = ["full", "rt", "tracing"] }
+
+# [dependencies.dev]
+# console-subscriber = "0.1.10"

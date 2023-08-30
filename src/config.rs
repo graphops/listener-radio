@@ -270,9 +270,9 @@ impl Config {
     pub fn args() -> Self {
         // TODO: load config file before parse (maybe add new level of subcommands)
         let config = Config::parse();
-        std::env::set_var("RUST_LOG", config.log_level.clone());
+        // std::env::set_var("RUST_LOG", config.log_level.clone());
         // Enables tracing under RUST_LOG variable
-        init_tracing(config.log_format.to_string()).expect("Could not set up global default subscriber for logger, check environmental variable `RUST_LOG` or the CLI input `log-level`");
+        // init_tracing(config.log_format.to_string()).expect("Could not set up global default subscriber for logger, check environmental variable `RUST_LOG` or the CLI input `log-level`");
         config
     }
 
