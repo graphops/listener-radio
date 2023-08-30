@@ -4,7 +4,7 @@ use axum::routing::get;
 use axum::Router;
 use once_cell::sync::Lazy;
 use prometheus::{core::Collector, Registry};
-use prometheus::{IntCounterVec, IntGauge, Opts};
+use prometheus::{IntCounterVec, IntGauge, IntCounter, Opts};
 use std::{net::SocketAddr, str::FromStr};
 use tracing::{debug, info};
 
@@ -68,19 +68,45 @@ pub static ACTIVE_PEERS: Lazy<IntGauge> = Lazy::new(|| {
     m
 });
 
-// /// Number of content topics with traffic
-// /// Updated periodically for the recently received messages
-// #[allow(dead_code)]
-// pub static ACTIVE_CONTENT_TOPICS: Lazy<IntGauge> = Lazy::new(|| {
-//     let m = IntGauge::with_opts(
-//         Opts::new("active_content_topics", "Number of content topics being gossiped on network")
-//             .namespace("graphcast")
-//             .subsystem("listener_radio"),
-//     )
-//     .expect("Failed to create active_content_topics gauges");
-//     prometheus::register(Box::new(m.clone())).expect("Failed to register active_content_topics guage");
-//     m
-// });
+#[allow(dead_code)]
+pub static CONNECTED_PEERS: Lazy<IntGauge> = Lazy::new(|| {
+    let m = IntGauge::with_opts(
+        Opts::new(
+            "connected_peers",
+            "Number of Gossip peers connected with Graphcast agent",
+        )
+        .namespace("graphcast")
+        .subsystem("listener_radio"),
+    )
+    .expect("Failed to create connected_peers gauge");
+    prometheus::register(Box::new(m.clone())).expect("Failed to register connected_peers gauge");
+    m
+});
+
+#[allow(dead_code)]
+pub static GOSSIP_PEERS: Lazy<IntGauge> = Lazy::new(|| {
+    let m = IntGauge::with_opts(
+        Opts::new("gossip_peers", "Total number of gossip peers discovered")
+            .namespace("graphcast")
+            .subsystem("listener_radio"),
+    )
+    .expect("Failed to create gossip_peers gauge");
+    prometheus::register(Box::new(m.clone())).expect("Failed to register gossip_peers gauge");
+    m
+});
+
+#[allow(dead_code)]
+pub static RECEIVED_MESSAGES: Lazy<IntCounter> = Lazy::new(|| {
+    let m = IntCounter::with_opts(
+        Opts::new("received_messages", "Number of messages received in total")
+            .namespace("graphcast")
+            .subsystem("listener_radio"),
+    )
+    .expect("Failed to create received_messages counter");
+    prometheus::register(Box::new(m.clone()))
+        .expect("Failed to register received_messages counter");
+    m
+});
 
 #[allow(dead_code)]
 pub static REGISTRY: Lazy<prometheus::Registry> = Lazy::new(prometheus::Registry::new);
@@ -102,6 +128,9 @@ pub fn start_metrics() {
             Box::new(INVALIDATED_MESSAGES.clone()),
             Box::new(CACHED_MESSAGES.clone()),
             Box::new(ACTIVE_PEERS.clone()),
+            Box::new(CONNECTED_PEERS.clone()),
+            Box::new(GOSSIP_PEERS.clone()),
+            Box::new(RECEIVED_MESSAGES.clone()),
         ],
     );
 }

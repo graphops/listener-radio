@@ -10,8 +10,9 @@ use std::time::Duration;
 use tokio::time::{interval, sleep, timeout};
 use tracing::{debug, info, trace, warn};
 
-use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent};
+use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, waku_handling::connected_peer_count, GraphcastAgent};
 
+use crate::metrics::{CONNECTED_PEERS, GOSSIP_PEERS, RECEIVED_MESSAGES};
 use crate::{config::Config,
     db::resolver::{add_message, list_messages},
     message_types::{PublicPoiMessage, SimpleMessage, UpgradeIntentMessage},
@@ -139,6 +140,9 @@ impl RadioOperator {
                     trace!("Network update");
                     let connection = network_check(&self.graphcast_agent().node_handle);
                     debug!(network_check = tracing::field::debug(&connection), "Network condition");
+                    // Update the number of peers connected
+                    CONNECTED_PEERS.set(connected_peer_count(&self.graphcast_agent().node_handle).unwrap_or_default().try_into().unwrap_or_default());
+                    GOSSIP_PEERS.set(self.graphcast_agent.number_of_peers().try_into().unwrap_or_default());
 
                     if let Some(true) = self.config.filter_protocol {
                         if skip_iteration.load(Ordering::SeqCst) {
@@ -196,6 +200,7 @@ impl RadioOperator {
         tokio::spawn(async move {
             for msg in receiver {
                 trace!("Message processing");
+                RECEIVED_MESSAGES.inc();
                 let timeout_duration = Duration::from_secs(1);
                 let process_res =
                     timeout(timeout_duration, process_message(&agent_ref, &db_ref, msg)).await;

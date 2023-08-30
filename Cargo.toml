@@ -10,7 +10,7 @@ keywords = ["graphprotocol", "data-integrity", "Indexer", "waku", "p2p"]
 categories = ["network-programming", "web-programming::http-client"]
 
 [dependencies]
-graphcast-sdk = { git = "https://github.com/graphops/graphcast-sdk/", branch = "hope/receiver-and-msg-type" }
+graphcast-sdk = { git = "https://github.com/graphops/graphcast-sdk/" }
 anyhow = "1.0"
 axum = { version = "0.5", features = ["headers"] }
 async-graphql = "4.0.16"
