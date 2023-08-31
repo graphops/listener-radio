@@ -1,11 +1,12 @@
 use std::{
     net::SocketAddr,
     str::FromStr,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, Mutex as SyncMutex},
 };
 
 use axum::{extract::Extension, routing::get, Router, Server};
 use sqlx::{Pool, Postgres};
+use tokio::{task::JoinHandle, runtime::{Runtime}};
 use tracing::{debug, info};
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
         model::{build_schema, RadioContext},
         routes::{graphql_handler, graphql_playground, health},
     },
+    shutdown_signal,
 };
 
 pub mod model;
@@ -23,7 +25,12 @@ pub mod routes;
 /// Set up the routes for a radio health endpoint at `/health`
 /// and a versioned GraphQL endpoint at `api/v1/graphql`
 /// This function starts a API server at the configured server_host and server_port
-pub async fn run_server(config: Config, db: Pool<Postgres>, _running_program: Arc<AtomicBool>) {
+pub async fn run_server(
+    config: Config,
+    db: Pool<Postgres>,
+    spawned_threads: Arc<SyncMutex<Vec<JoinHandle<()>>>>,
+    runtime_handler: Arc<Runtime>,
+) {
     if config.server_port().is_none() {
         return;
     }
@@ -51,7 +58,7 @@ pub async fn run_server(config: Config, db: Pool<Postgres>, _running_program: Ar
     );
     Server::bind(&addr)
         .serve(app.into_make_service())
-        // .with_graceful_shutdown(shutdown_signal(running_program))
+        .with_graceful_shutdown(shutdown_signal(spawned_threads, runtime_handler))
         .await
         .unwrap();
 }

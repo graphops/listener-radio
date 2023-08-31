@@ -1,15 +1,15 @@
 use async_graphql::{Error, ErrorExtensions};
 use autometrics::autometrics;
 use once_cell::sync::OnceCell;
+
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+        Arc, Mutex as SyncMutex,
+    }, thread::sleep, time::Duration,
 };
-use tokio::signal;
-use tracing::error;
+use tokio::{signal, task::JoinHandle, runtime::Runtime};
+use tracing::{error, trace};
 
 use graphcast_sdk::{
     graphcast_agent::GraphcastAgent,
@@ -88,8 +88,13 @@ pub fn chainhead_block_str(
 }
 
 /// Graceful shutdown when receive signal
-pub async fn shutdown_signal(running_program: Arc<AtomicBool>) {
+// pub async fn shutdown_signal(running_program: Arc<AtomicBool>, pool: ThreadPool) {
+pub async fn shutdown_signal(
+    spawned_threads: Arc<SyncMutex<Vec<JoinHandle<()>>>>,
+    runtime_handler: Arc<Runtime>,
+) {
     let ctrl_c = async {
+        trace!("Received shutdown signal ctrl_c");
         signal::ctrl_c()
             .await
             .expect("failed to install Ctrl+C handler");
@@ -97,6 +102,7 @@ pub async fn shutdown_signal(running_program: Arc<AtomicBool>) {
 
     #[cfg(unix)]
     let terminate = async {
+        trace!("Received shutdown signal terminate");
         signal::unix::signal(signal::unix::SignalKind::terminate())
             .expect("failed to install signal handler")
             .recv()
@@ -108,10 +114,41 @@ pub async fn shutdown_signal(running_program: Arc<AtomicBool>) {
 
     tokio::select! {
         _ = ctrl_c => {println!("Shutting down server...");},
-        _ = terminate => {},
+        _ = terminate => {println!("Terminating server...")},
     }
 
-    running_program.store(false, Ordering::SeqCst);
+    
+    // runtime_handler.shutdown_background();
+    println!("Shutdown handles: {:#?}", spawned_threads);
+    let threads = spawned_threads.lock().unwrap();
+    for handle in threads.iter() {
+        println!("Shutdown handle: {:#?}", handle);
+        let r = drop(handle);
+        println!("drop handle: {:#?}", r);
+    }
+    
+    println!("Cleaning up: {:#?}", spawned_threads);
+    sleep(Duration::from_secs(10));
+
+    for handle in threads.iter() {
+        println!("what handle: {:#?}", handle);
+        while !handle.is_finished() {
+            sleep(Duration::from_secs(10));
+            println!("abort handle again: {:#?}", handle);
+            handle.abort();
+        }
+    }
+
+    println!("abort agent runtime: {:#?}", runtime_handler);
+    let handle = runtime_handler.handle().clone();
+    
+    handle.spawn(async move {
+        println!("abort agent runtime!!!!!");
+        
+        Arc::try_unwrap(runtime_handler).unwrap().shutdown_background();
+        println!("called shutdown");
+    });
+
     opentelemetry::global::shutdown_tracer_provider();
 }
 

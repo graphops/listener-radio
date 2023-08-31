@@ -320,8 +320,7 @@ impl Config {
             self.filter_protocol,
             self.discv5_enrs.clone(),
             self.discv5_port,
-        )
-        .await
+        ).await
     }
 
     pub fn callbook(&self) -> CallBook {

@@ -2265,7 +2265,6 @@ dependencies = [
 [[package]]
 name = "graphcast-sdk"
 version = "0.4.2"
-source = "git+https://github.com/graphops/graphcast-sdk/#ad073566ecb84bedefc7b755c96de36f0e674c51"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -2913,7 +2912,9 @@ dependencies = [
  "serde_json",
  "sqlx",
  "thiserror",
+ "threadpool",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
 ]
@@ -5253,6 +5254,15 @@ checksum = "3fdd6f064ccff2d6567adcb3873ca630700f00b5ad3f060c25b5dcfd9a4ce152"
 dependencies = [
  "cfg-if",
  "once_cell",
+]
+
+[[package]]
+name = "threadpool"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
+dependencies = [
+ "num_cpus",
 ]
 
 [[package]]
