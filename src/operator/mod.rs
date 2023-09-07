@@ -1,25 +1,31 @@
 use anyhow::anyhow;
 use graphcast_sdk::graphcast_agent::waku_handling::network_check;
 use graphcast_sdk::WakuMessage;
+use prost::Message;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
+use tokio::runtime::Runtime;
 use tokio::time::{interval, sleep, timeout};
 use tracing::{debug, info, trace, warn};
 
-use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, waku_handling::connected_peer_count, GraphcastAgent};
+use graphcast_sdk::graphcast_agent::{
+    message_typing::GraphcastMessage, waku_handling::connected_peer_count, GraphcastAgent,
+};
 
 use crate::metrics::{CONNECTED_PEERS, GOSSIP_PEERS, RECEIVED_MESSAGES};
-use crate::{config::Config,
+use crate::{
+    config::Config,
     db::resolver::{add_message, list_messages},
     message_types::{PublicPoiMessage, SimpleMessage, UpgradeIntentMessage},
     metrics::{handle_serve_metrics, ACTIVE_PEERS, CACHED_MESSAGES},
     operator::radio_types::RadioPayloadMessage,
     server::run_server,
-    GRAPHCAST_AGENT
+    GRAPHCAST_AGENT,
 };
 
 use self::notifier::Notifier;
@@ -92,7 +98,7 @@ impl RadioOperator {
                 .await;
         }
 
-        self.message_processor(receiver).await;
+        message_processor(self.db.clone(), receiver).await;
         GRAPHCAST_AGENT
             .get()
             .unwrap()
@@ -174,7 +180,7 @@ impl RadioOperator {
                     let result = timeout(update_timeout,
                         list_messages::<GraphcastMessage<RadioPayloadMessage>>(&self.db)
                     ).await;
-                    
+
                     match result {
                         Err(e) => warn!(err = tracing::field::debug(e), "Summary timed out"),
                         Ok(msgs) => {
@@ -193,17 +199,18 @@ impl RadioOperator {
             continue;
         }
     }
+}
 
-    pub async fn message_processor(&self, receiver: Receiver<WakuMessage>) {
-        let agent_ref = self.graphcast_agent.clone();
-        let db_ref = self.db.clone();
-        tokio::spawn(async move {
-            for msg in receiver {
+pub async fn message_processor(db_ref: Pool<Postgres>, receiver: Receiver<WakuMessage>) {
+    thread::spawn(move || {
+        let rt = Runtime::new().expect("Could not create Tokio runtime");
+        let db_ref_rt = db_ref.clone();
+        for msg in receiver {
+            rt.block_on(async {
                 trace!("Message processing");
                 RECEIVED_MESSAGES.inc();
                 let timeout_duration = Duration::from_secs(1);
-                let process_res =
-                    timeout(timeout_duration, process_message(&agent_ref, &db_ref, msg)).await;
+                let process_res = timeout(timeout_duration, process_message(&db_ref_rt, msg)).await;
                 match process_res {
                     Ok(Ok(r)) => trace!(msg_row_id = r, "New message added to DB"),
                     Ok(Err(e)) => {
@@ -211,27 +218,17 @@ impl RadioOperator {
                     }
                     Err(e) => debug!(error = e.to_string(), "Message processor timed out"),
                 }
-            }
-        });
-    }
+            });
+        }
+    });
 }
 
-pub async fn process_message(
-    graphcast_agent: &Arc<GraphcastAgent>,
-    db: &Pool<Postgres>,
-    msg: WakuMessage,
-) -> Result<i64, anyhow::Error> {
-    if let Ok(msg) = graphcast_agent
-        .decode::<PublicPoiMessage>(msg.payload())
-        .await
-    {
+pub async fn process_message(db: &Pool<Postgres>, msg: WakuMessage) -> Result<i64, anyhow::Error> {
+    if let Ok(msg) = GraphcastMessage::<PublicPoiMessage>::decode(msg.payload()).await {
         add_message(db, msg).await
-    } else if let Ok(msg) = graphcast_agent
-        .decode::<UpgradeIntentMessage>(msg.payload())
-        .await
-    {
+    } else if let Ok(msg) = GraphcastMessage::<UpgradeIntentMessage>::decode(msg.payload()).await {
         add_message(db, msg).await
-    } else if let Ok(msg) = graphcast_agent.decode::<SimpleMessage>(msg.payload()).await {
+    } else if let Ok(msg) = GraphcastMessage::<SimpleMessage>::decode(msg.payload()).await {
         add_message(db, msg).await
     } else {
         Err(anyhow!("Message cannot be decoded"))
