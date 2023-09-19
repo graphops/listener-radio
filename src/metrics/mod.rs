@@ -109,6 +109,19 @@ pub static RECEIVED_MESSAGES: Lazy<IntCounter> = Lazy::new(|| {
 });
 
 #[allow(dead_code)]
+pub static PRUNED_MESSAGES: Lazy<IntGauge> = Lazy::new(|| {
+    let m = IntGauge::with_opts(
+        Opts::new("pruned_messages", "Number of messages pruned in total")
+            .namespace("graphcast")
+            .subsystem("listener_radio"),
+    )
+    .expect("Failed to create pruned_messages gauge");
+    prometheus::register(Box::new(m.clone()))
+        .expect("Failed to register pruned_messages gauge");
+    m
+});
+
+#[allow(dead_code)]
 pub static REGISTRY: Lazy<prometheus::Registry> = Lazy::new(prometheus::Registry::new);
 
 #[allow(dead_code)]
@@ -131,6 +144,7 @@ pub fn start_metrics() {
             Box::new(CONNECTED_PEERS.clone()),
             Box::new(GOSSIP_PEERS.clone()),
             Box::new(RECEIVED_MESSAGES.clone()),
+            Box::new(PRUNED_MESSAGES.clone()),
         ],
     );
 }

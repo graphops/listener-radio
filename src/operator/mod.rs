@@ -1,7 +1,6 @@
 use anyhow::anyhow;
 use graphcast_sdk::graphcast_agent::waku_handling::network_check;
 use graphcast_sdk::WakuMessage;
-use prost::Message;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,13 +16,13 @@ use graphcast_sdk::graphcast_agent::{
     message_typing::GraphcastMessage, waku_handling::connected_peer_count, GraphcastAgent,
 };
 
-use crate::metrics::{CONNECTED_PEERS, GOSSIP_PEERS, RECEIVED_MESSAGES};
+use crate::db::resolver::retain_max_storage;
+use crate::metrics::{CONNECTED_PEERS, GOSSIP_PEERS, RECEIVED_MESSAGES, PRUNED_MESSAGES};
 use crate::{
     config::Config,
     db::resolver::{add_message, list_messages},
     message_types::{PublicPoiMessage, SimpleMessage, UpgradeIntentMessage},
     metrics::{handle_serve_metrics, ACTIVE_PEERS, CACHED_MESSAGES},
-    operator::radio_types::RadioPayloadMessage,
     server::run_server,
     GRAPHCAST_AGENT,
 };
@@ -181,16 +180,34 @@ impl RadioOperator {
                         skip_iteration.store(false, Ordering::SeqCst);
                         continue;
                     }
+
+                    // Prune old messages
+                    let num_pruned = 
+                        match timeout(update_timeout,
+                            retain_max_storage(&self.db, self.config.max_storage.try_into().unwrap())
+                        ).await {
+                            Err(e) => {debug!(err = tracing::field::debug(e), "Pruning time out"); 0},
+                            Ok(Ok(num_pruned)) => {
+                                PRUNED_MESSAGES.set(num_pruned);
+                                num_pruned
+                            }
+                            Ok(Err(e)) => {
+                                warn!(err = tracing::field::debug(e), "Pruning time out"); 0
+                            }
+                        };
+
+                    // List the ones leftover
                     let result = timeout(update_timeout,
-                        list_messages::<GraphcastMessage<RadioPayloadMessage>>(&self.db)
+                        list_messages::<GraphcastMessage<PublicPoiMessage>>(&self.db)
                     ).await;
 
                     match result {
-                        Err(e) => warn!(err = tracing::field::debug(e), "Summary timed out"),
+                        Err(e) => warn!(err = tracing::field::debug(e), "Public PoI messages summary timed out"),
                         Ok(msgs) => {
                             let msg_num = &msgs.map_or(0, |m| m.len());
                             CACHED_MESSAGES.set(*msg_num as i64);
                             info!(total_messages = msg_num,
+                                num_pruned,
                                 "Monitoring summary"
                             )
                         }
@@ -218,7 +235,7 @@ pub async fn message_processor(db_ref: Pool<Postgres>, receiver: Receiver<WakuMe
                 match process_res {
                     Ok(Ok(r)) => trace!(msg_row_id = r, "New message added to DB"),
                     Ok(Err(e)) => {
-                        debug!(err = tracing::field::debug(&e), "Failed to process message");
+                        trace!(err = tracing::field::debug(&e), "Failed to process message");
                     }
                     Err(e) => debug!(error = e.to_string(), "Message processor timed out"),
                 }
