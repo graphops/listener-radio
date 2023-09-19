@@ -141,7 +141,7 @@ impl RadioOperator {
         while running.load(Ordering::SeqCst) {
             if self.graphcast_agent.number_of_peers() == 0 {
                 info!("No active peers on the network, sleep for 10 seconds");
-                let _ = sleep(Duration::from_secs(10));
+                let _ = sleep(Duration::from_secs(10)).await;
             }
             // Run event intervals sequentially by satisfication of other intervals and corresponding tick
             tokio::select! {
