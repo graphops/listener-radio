@@ -249,6 +249,13 @@ pub struct Config {
     pub radio_name: String,
     #[clap(
         long,
+        value_name = "MAX_STORAGE",
+        env = "MAX_STORAGE",
+        default_value = "3000",
+    )]
+    pub max_storage: i32,
+    #[clap(
+        long,
         value_name = "ID_VALIDATION",
         value_enum,
         env = "ID_VALIDATION",

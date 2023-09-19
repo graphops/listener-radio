@@ -13,6 +13,12 @@ pub struct Row<T: Clone + Serialize + DeserializeOwned + OutputType> {
     message: Json<T>,
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub struct MessageID {
+    id: i64,
+}
+
 // Define graphql type for the Row in Messages
 impl<T: Clone + Serialize + DeserializeOwned + OutputType> Row<T> {
     pub fn get_graphql_row(&self) -> GraphQLRow<T> {
@@ -144,4 +150,48 @@ RETURNING id, message as "message: Json<T>"
     .await?;
 
     Ok(rows)
+}
+
+/// Function to automatically prune older messages and keep the `max_storage` newest messages
+/// We prune from the smallest id by the automcatic ascending behavior
+/// Return the number of messages deleted
+pub async fn retain_max_storage(
+    pool: &PgPool,
+    max_storage: usize,
+) -> Result<i64, anyhow::Error>
+{
+    // find out the IDs of the top `max_storage` newest messages.
+    let top_ids: Vec<i64> = sqlx::query_as!(
+        MessageID,
+        r#"
+SELECT id
+FROM messages
+ORDER BY id DESC
+LIMIT $1
+        "#,
+        max_storage as i64
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|row| row.id)
+    .collect::<Vec<i64>>();
+
+    trace!(top_ids = tracing::field::debug(&top_ids), "IDs to keep");
+
+    // Then, delete all messages except those with the above IDs.
+    let deleted_ids = sqlx::query!(
+        r#"
+DELETE
+FROM messages
+WHERE id NOT IN (SELECT unnest($1::int8[]))
+RETURNING id
+        "#,
+        &top_ids
+    )
+    .fetch_all(pool)
+    .await?
+    .len();
+
+    Ok(deleted_ids.try_into().unwrap())
 }
