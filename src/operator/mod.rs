@@ -17,7 +17,7 @@ use graphcast_sdk::graphcast_agent::{
 };
 
 use crate::db::resolver::retain_max_storage;
-use crate::metrics::{CONNECTED_PEERS, GOSSIP_PEERS, RECEIVED_MESSAGES, PRUNED_MESSAGES};
+use crate::metrics::{CONNECTED_PEERS, GOSSIP_PEERS, PRUNED_MESSAGES, RECEIVED_MESSAGES};
 use crate::{
     config::Config,
     db::resolver::{add_message, list_messages},
@@ -182,7 +182,7 @@ impl RadioOperator {
                     }
 
                     // Prune old messages
-                    let num_pruned = 
+                    let num_pruned =
                         match timeout(update_timeout,
                             retain_max_storage(&self.db, self.config.max_storage.try_into().unwrap())
                         ).await {

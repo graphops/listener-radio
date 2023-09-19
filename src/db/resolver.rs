@@ -155,11 +155,7 @@ RETURNING id, message as "message: Json<T>"
 /// Function to automatically prune older messages and keep the `max_storage` newest messages
 /// We prune from the smallest id by the automcatic ascending behavior
 /// Return the number of messages deleted
-pub async fn retain_max_storage(
-    pool: &PgPool,
-    max_storage: usize,
-) -> Result<i64, anyhow::Error>
-{
+pub async fn retain_max_storage(pool: &PgPool, max_storage: usize) -> Result<i64, anyhow::Error> {
     // find out the IDs of the top `max_storage` newest messages.
     let top_ids: Vec<i64> = sqlx::query_as!(
         MessageID,

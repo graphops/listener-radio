@@ -116,8 +116,7 @@ pub static PRUNED_MESSAGES: Lazy<IntGauge> = Lazy::new(|| {
             .subsystem("listener_radio"),
     )
     .expect("Failed to create pruned_messages gauge");
-    prometheus::register(Box::new(m.clone()))
-        .expect("Failed to register pruned_messages gauge");
+    prometheus::register(Box::new(m.clone())).expect("Failed to register pruned_messages gauge");
     m
 });
 

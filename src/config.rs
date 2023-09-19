@@ -251,7 +251,7 @@ pub struct Config {
         long,
         value_name = "MAX_STORAGE",
         env = "MAX_STORAGE",
-        default_value = "3000",
+        default_value = "3000"
     )]
     pub max_storage: i32,
     #[clap(
