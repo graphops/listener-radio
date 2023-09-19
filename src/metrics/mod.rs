@@ -162,5 +162,5 @@ pub async fn handle_serve_metrics(host: String, port: u16) {
     server
         .serve(app.into_make_service())
         .await
-        .expect("Error starting example API server");
+        .expect("Error starting API server");
 }

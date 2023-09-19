@@ -140,6 +140,10 @@ impl RadioOperator {
         // Main loop for sending messages, can factor out
         // and take radio specific query and parsing for radioPayload
         while running.load(Ordering::SeqCst) {
+            if self.graphcast_agent.number_of_peers() == 0 {
+                info!("No active peers on the network, sleep for 10 seconds");
+                let _ = sleep(Duration::from_secs(10));
+            }
             // Run event intervals sequentially by satisfication of other intervals and corresponding tick
             tokio::select! {
                 _ = network_update_interval.tick() => {
@@ -214,7 +218,7 @@ pub async fn message_processor(db_ref: Pool<Postgres>, receiver: Receiver<WakuMe
                 match process_res {
                     Ok(Ok(r)) => trace!(msg_row_id = r, "New message added to DB"),
                     Ok(Err(e)) => {
-                        warn!(err = tracing::field::debug(&e), "Failed to process message");
+                        debug!(err = tracing::field::debug(&e), "Failed to process message");
                     }
                     Err(e) => debug!(error = e.to_string(), "Message processor timed out"),
                 }
@@ -231,6 +235,10 @@ pub async fn process_message(db: &Pool<Postgres>, msg: WakuMessage) -> Result<i6
     } else if let Ok(msg) = GraphcastMessage::<SimpleMessage>::decode(msg.payload()).await {
         add_message(db, msg).await
     } else {
-        Err(anyhow!("Message cannot be decoded"))
+        trace!(
+            topic = tracing::field::debug(msg.content_topic()),
+            "Message decode failed"
+        );
+        Err(anyhow!("Unsupported message types"))
     }
 }
