@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nDELETE\nFROM messages\nWHERE id NOT IN (SELECT unnest($1::int8[]))\nRETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0fcd47f4e8d4a08ac027d352ecb9a3e7092d9dab84b5e5641ff922a45216b8d3"
+}
