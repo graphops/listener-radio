@@ -2350,8 +2350,8 @@ dependencies = [
 
 [[package]]
 name = "graphcast-sdk"
-version = "0.4.2"
-source = "git+https://github.com/graphops/graphcast-sdk/?branch=hope/msg-decoding-refactor#d0f9dd938da98f946f1eecfebd1453044b2a22b2"
+version = "0.4.3"
+source = "git+https://github.com/graphops/graphcast-sdk/#6746c9a2d6cf48afd3e1ffa7e5dd3a5553d0c8d3"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -6181,9 +6181,9 @@ checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "waku-bindings"
-version = "0.1.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7a89ee47bda6b6fef5e4bd304722e35c94627bd7446870129a5c5fa6d2545fe"
+checksum = "4cbf825d80777c831d36f030029f883c5dd0fc255d0025896c67b4ba14c5ad9a"
 dependencies = [
  "aes-gcm",
  "base64 0.21.2",
@@ -6203,9 +6203,9 @@ dependencies = [
 
 [[package]]
 name = "waku-sys"
-version = "0.1.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b86972863fbd4aba650a2908107d2659adeddef3ee6fb8c98e1b13256dfdca7"
+checksum = "2e52e75616474f736edf5483b54448d0f9726d84cf29d07f4be5aaebb47c8749"
 dependencies = [
  "bindgen",
 ]

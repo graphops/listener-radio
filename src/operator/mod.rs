@@ -24,7 +24,6 @@ use crate::{
     message_types::{PublicPoiMessage, SimpleMessage, UpgradeIntentMessage},
     metrics::{handle_serve_metrics, ACTIVE_PEERS, CACHED_MESSAGES},
     server::run_server,
-    GRAPHCAST_AGENT,
 };
 
 use self::notifier::Notifier;
@@ -48,8 +47,6 @@ impl RadioOperator {
     pub async fn new(config: Config, graphcast_agent: GraphcastAgent) -> RadioOperator {
         debug!("Set global static instance of graphcast_agent");
         let graphcast_agent = Arc::new(graphcast_agent);
-        _ = GRAPHCAST_AGENT.set(graphcast_agent.clone());
-
         let notifier = Notifier::from_config(&config);
 
         debug!("Connecting to database");
@@ -98,11 +95,6 @@ impl RadioOperator {
         }
 
         message_processor(self.db.clone(), receiver).await;
-        GRAPHCAST_AGENT
-            .get()
-            .unwrap()
-            .register_handler()
-            .expect("Could not register handler");
     }
 
     pub fn graphcast_agent(&self) -> &GraphcastAgent {
@@ -245,11 +237,11 @@ pub async fn message_processor(db_ref: Pool<Postgres>, receiver: Receiver<WakuMe
 }
 
 pub async fn process_message(db: &Pool<Postgres>, msg: WakuMessage) -> Result<i64, anyhow::Error> {
-    if let Ok(msg) = GraphcastMessage::<PublicPoiMessage>::decode(msg.payload()).await {
+    if let Ok(msg) = GraphcastMessage::<PublicPoiMessage>::decode(msg.payload()) {
         add_message(db, msg).await
-    } else if let Ok(msg) = GraphcastMessage::<UpgradeIntentMessage>::decode(msg.payload()).await {
+    } else if let Ok(msg) = GraphcastMessage::<UpgradeIntentMessage>::decode(msg.payload()) {
         add_message(db, msg).await
-    } else if let Ok(msg) = GraphcastMessage::<SimpleMessage>::decode(msg.payload()).await {
+    } else if let Ok(msg) = GraphcastMessage::<SimpleMessage>::decode(msg.payload()) {
         add_message(db, msg).await
     } else {
         trace!(

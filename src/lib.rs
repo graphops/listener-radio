@@ -12,7 +12,6 @@ use tokio::signal;
 use tracing::error;
 
 use graphcast_sdk::{
-    graphcast_agent::GraphcastAgent,
     graphcast_agent::GraphcastAgentError,
     graphql::client_network::query_network_subgraph,
     graphql::{client_graph_node::get_indexing_statuses, QueryError},
@@ -26,10 +25,6 @@ pub mod message_types;
 pub mod metrics;
 pub mod operator;
 pub mod server;
-
-/// A global static (singleton) instance of GraphcastAgent. It is useful to ensure that we have only one GraphcastAgent
-/// per Radio instance, so that we can keep track of state and more easily test our Radio application.
-pub static GRAPHCAST_AGENT: OnceCell<Arc<GraphcastAgent>> = OnceCell::new();
 
 pub fn radio_name() -> &'static str {
     "listener-radio"
