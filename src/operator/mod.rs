@@ -6,7 +6,7 @@ use sqlx::{Pool, Postgres};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
-use std::thread;
+use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use tokio::runtime::Runtime;
 use tokio::time::{interval, sleep, timeout};
@@ -39,12 +39,20 @@ pub struct RadioOperator {
     db: Pool<Postgres>,
     graphcast_agent: Arc<GraphcastAgent>,
     notifier: Notifier,
+    running: Arc<AtomicBool>,
+    message_processor_handle: JoinHandle<()>,
 }
 
 impl RadioOperator {
     /// Create a radio operator with radio configurations, persisted data,
     /// graphcast agent, and control flow
-    pub async fn new(config: Config, graphcast_agent: GraphcastAgent) -> RadioOperator {
+    pub async fn new(
+        config: Config,
+        graphcast_agent: GraphcastAgent,
+        receiver: Receiver<WakuMessage>,
+    ) -> RadioOperator {
+        let running = Arc::new(AtomicBool::new(true));
+
         debug!("Set global static instance of graphcast_agent");
         let graphcast_agent = Arc::new(graphcast_agent);
         let notifier = Notifier::from_config(&config);
@@ -64,37 +72,32 @@ impl RadioOperator {
             .await
             .expect("Could not run migration");
 
+        // Set up Prometheus metrics url if configured
+        if let Some(port) = config.metrics_port {
+            debug!("Initializing metrics port");
+            tokio::spawn(handle_serve_metrics(config.metrics_host.clone(), port));
+        }
+
+        if let Some(true) = config.filter_protocol {
+            // Provide generated topics to Graphcast agent
+            let topics = config.topics.to_vec();
+            debug!(
+                topics = tracing::field::debug(&topics),
+                "Found content topics for subscription",
+            );
+            graphcast_agent.update_content_topics(topics.clone()).await;
+        }
+
+        let message_processor_handle = message_processor(db.clone(), receiver).await;
         debug!("Initialized Radio Operator");
         RadioOperator {
             config,
             db,
             graphcast_agent,
             notifier,
+            running,
+            message_processor_handle,
         }
-    }
-
-    /// Preparation for running the radio applications
-    /// Expose metrics and subscribe to graphcast topics
-    pub async fn prepare(&self, receiver: Receiver<WakuMessage>) {
-        // Set up Prometheus metrics url if configured
-        if let Some(port) = self.config.metrics_port {
-            debug!("Initializing metrics port");
-            tokio::spawn(handle_serve_metrics(self.config.metrics_host.clone(), port));
-        }
-
-        if let Some(true) = self.config.filter_protocol {
-            // Provide generated topics to Graphcast agent
-            let topics = self.config.topics.to_vec();
-            debug!(
-                topics = tracing::field::debug(&topics),
-                "Found content topics for subscription",
-            );
-            self.graphcast_agent
-                .update_content_topics(topics.clone())
-                .await;
-        }
-
-        message_processor(self.db.clone(), receiver).await;
     }
 
     pub fn graphcast_agent(&self) -> &GraphcastAgent {
@@ -104,8 +107,7 @@ impl RadioOperator {
     /// Radio operations
     pub async fn run(&self) {
         // Control flow
-        // TODO: expose to radio config for the users
-        let running = Arc::new(AtomicBool::new(true));
+        let running = self.running.clone();
         let skip_iteration = Arc::new(AtomicBool::new(false));
         let skip_iteration_clone = skip_iteration.clone();
 
@@ -139,7 +141,7 @@ impl RadioOperator {
             tokio::select! {
                 _ = network_update_interval.tick() => {
                     trace!("Network update");
-                    let connection = network_check(&self.graphcast_agent().node_handle);
+                    let connection = network_check(&self.graphcast_agent().node_handle, self.graphcast_agent().filter_protocol_enabled);
                     debug!(network_check = tracing::field::debug(&connection), "Network condition");
                     // Update the number of peers connected
                     CONNECTED_PEERS.set(connected_peer_count(&self.graphcast_agent().node_handle).unwrap_or_default().try_into().unwrap_or_default());
@@ -214,7 +216,10 @@ impl RadioOperator {
     }
 }
 
-pub async fn message_processor(db_ref: Pool<Postgres>, receiver: Receiver<WakuMessage>) {
+pub async fn message_processor(
+    db_ref: Pool<Postgres>,
+    receiver: Receiver<WakuMessage>,
+) -> JoinHandle<()> {
     thread::spawn(move || {
         let rt = Runtime::new().expect("Could not create Tokio runtime");
         let db_ref_rt = db_ref.clone();
@@ -233,7 +238,7 @@ pub async fn message_processor(db_ref: Pool<Postgres>, receiver: Receiver<WakuMe
                 }
             });
         }
-    });
+    })
 }
 
 pub async fn process_message(db: &Pool<Postgres>, msg: WakuMessage) -> Result<i64, anyhow::Error> {
