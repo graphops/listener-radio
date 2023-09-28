@@ -1,6 +1,6 @@
 use async_graphql::{Error, ErrorExtensions};
 use autometrics::autometrics;
-use once_cell::sync::OnceCell;
+
 use std::{
     collections::HashMap,
     sync::{

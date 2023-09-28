@@ -18,10 +18,7 @@ async fn main() {
     .await
     .expect("Initialize Graphcast agent");
 
-    let radio_operator = RadioOperator::new(radio_config, agent).await;
-
-    // Start separate processes
-    radio_operator.prepare(receiver).await;
+    let radio_operator = RadioOperator::new(radio_config, agent, receiver).await;
 
     // Start radio operations
     radio_operator.run().await;
