@@ -26,6 +26,23 @@ jobs:
       image: rust:latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+      - uses: actions/setup-go@v3 # we need go to build go-waku
+        with:
+          go-version: '1.19'
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.toolchain }}
+          default: true
+          override: true
+      - uses: actions-rs/cargo@v1
+        continue-on-error: false
+        with:
+          command: check
       - uses: actions/cache@v3
         with:
           path: |
