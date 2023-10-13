@@ -19,42 +19,6 @@ jobs:
           rustup component add rustfmt
           cargo fmt --all -- --check
 
-  clippy:
-    name: cargo clippy
-    runs-on: ubuntu-latest
-    container: 
-      image: rust:latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
-      - uses: actions/setup-go@v3 # we need go to build go-waku
-        with:
-          go-version: '1.19'
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ matrix.toolchain }}
-          default: true
-          override: true
-      - uses: actions-rs/cargo@v1
-        continue-on-error: false
-        with:
-          command: check
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-clippy
-      - run: |
-          rustup component add clippy
-          # Temporarily allowing dead-code, while denying all other warnings
-          cargo clippy --all-features --all-targets -- -A dead-code -D warnings
-
   check:
     name: Check
     if: github.event.review.state == 'approved'
@@ -85,6 +49,10 @@ jobs:
         continue-on-error: false
         with:
           command: check
+      - name: Run Clippy
+        run: |
+          rustup component add clippy
+          cargo clippy --all-features --all-targets -- -D warnings
 
   test:
     name: Test Suite
