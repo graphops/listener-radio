@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use graphcast_sdk::graphcast_agent::waku_handling::network_check;
 use graphcast_sdk::WakuMessage;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
@@ -12,9 +11,7 @@ use tokio::runtime::Runtime;
 use tokio::time::{interval, sleep, timeout};
 use tracing::{debug, info, trace, warn};
 
-use graphcast_sdk::graphcast_agent::{
-    message_typing::GraphcastMessage, waku_handling::connected_peer_count, GraphcastAgent,
-};
+use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent};
 
 use crate::db::resolver::retain_max_storage;
 use crate::metrics::{CONNECTED_PEERS, GOSSIP_PEERS, PRUNED_MESSAGES, RECEIVED_MESSAGES};
@@ -85,7 +82,7 @@ impl RadioOperator {
                 topics = tracing::field::debug(&topics),
                 "Found content topics for subscription",
             );
-            graphcast_agent.update_content_topics(topics.clone()).await;
+            graphcast_agent.update_content_topics(topics.clone());
         }
 
         let message_processor_handle = message_processor(db.clone(), receiver).await;
@@ -141,10 +138,12 @@ impl RadioOperator {
             tokio::select! {
                 _ = network_update_interval.tick() => {
                     trace!("Network update");
-                    let connection = network_check(&self.graphcast_agent().node_handle, self.graphcast_agent().filter_protocol_enabled);
+                    let connection = self.graphcast_agent.network_check();
                     debug!(network_check = tracing::field::debug(&connection), "Network condition");
+
                     // Update the number of peers connected
-                    CONNECTED_PEERS.set(connected_peer_count(&self.graphcast_agent().node_handle).unwrap_or_default().try_into().unwrap_or_default());
+                    let connected_peers = self.graphcast_agent.connected_peer_count().unwrap_or_default() as i64;
+                    CONNECTED_PEERS.set(connected_peers);
                     GOSSIP_PEERS.set(self.graphcast_agent.number_of_peers().try_into().unwrap_or_default());
 
                     if let Some(true) = self.config.filter_protocol {
@@ -152,20 +151,13 @@ impl RadioOperator {
                             skip_iteration.store(false, Ordering::SeqCst);
                             continue;
                         }
+
                         // Update topic subscription
-                        let result = timeout(update_timeout,
-                            self.graphcast_agent()
-                            .update_content_topics(self.config.topics.to_vec())
-                        ).await;
+                        self.graphcast_agent()
+                            .update_content_topics(self.config.topics.to_vec());
 
                         ACTIVE_PEERS
                             .set(self.graphcast_agent.number_of_peers().try_into().unwrap());
-
-                        if result.is_err() {
-                            warn!("update_content_topics timed out");
-                        } else {
-                            debug!("update_content_topics completed");
-                        }
                     }
                 },
                 _ = comparison_interval.tick() => {

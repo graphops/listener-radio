@@ -9,8 +9,7 @@ use crate::{config::Config, radio_name};
 #[derive(Clone, Debug, Getters, Serialize, Deserialize, PartialEq)]
 pub struct Notifier {
     radio_name: String,
-    slack_token: Option<String>,
-    slack_channel: Option<String>,
+    slack_webhook: Option<String>,
     discord_webhook: Option<String>,
     telegram_token: Option<String>,
     telegram_chat_id: Option<i64>,
@@ -19,16 +18,14 @@ pub struct Notifier {
 impl Notifier {
     pub fn new(
         radio_name: String,
-        slack_token: Option<String>,
-        slack_channel: Option<String>,
+        slack_webhook: Option<String>,
         discord_webhook: Option<String>,
         telegram_token: Option<String>,
         telegram_chat_id: Option<i64>,
     ) -> Notifier {
         Notifier {
             radio_name,
-            slack_token,
-            slack_channel,
+            slack_webhook,
             discord_webhook,
             telegram_token,
             telegram_chat_id,
@@ -37,16 +34,14 @@ impl Notifier {
 
     pub fn from_config(config: &Config) -> Self {
         let radio_name = radio_name().to_string();
-        let slack_token = config.slack_token.clone();
-        let slack_channel = config.slack_channel.clone();
+        let slack_webhook = config.slack_webhook.clone();
         let discord_webhook = config.discord_webhook.clone();
         let telegram_token = config.telegram_token.clone();
         let telegram_chat_id = config.telegram_chat_id;
 
         Notifier::new(
             radio_name,
-            slack_token,
-            slack_channel,
+            slack_webhook,
             discord_webhook,
             telegram_token,
             telegram_chat_id,
@@ -54,10 +49,8 @@ impl Notifier {
     }
 
     pub async fn notify(self, content: String) {
-        if let (Some(token), Some(channel)) = (&self.slack_token, &self.slack_channel) {
-            if let Err(e) =
-                SlackBot::send_webhook(token.to_string(), channel, &self.radio_name, &content).await
-            {
+        if let Some(url) = &self.slack_webhook {
+            if let Err(e) = SlackBot::send_webhook(url, &self.radio_name, &content).await {
                 warn!(
                     err = tracing::field::debug(e),
                     "Failed to send notification to Slack"
