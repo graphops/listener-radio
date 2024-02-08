@@ -2365,8 +2365,9 @@ dependencies = [
 
 [[package]]
 name = "graphcast-sdk"
-version = "0.6.0"
-source = "git+https://github.com/graphops/graphcast-sdk#5b300e6e0c912de8d5a627ec51147ae173ea346c"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05bc33c97b9c097a078a5404cc2c9fbbeed00e342bd890f6c2a10c10960d369b"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -3062,7 +3063,7 @@ checksum = "01cda141df6706de531b6c46c3a33ecca755538219bd484262fa09410c13539c"
 
 [[package]]
 name = "listener-radio"
-version = "0.0.1"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "async-graphql",
