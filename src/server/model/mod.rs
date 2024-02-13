@@ -1,15 +1,16 @@
 use async_graphql::{Context, EmptySubscription, Object, OutputType, Schema, SimpleObject};
 
+use chrono::{Duration, Utc};
 use serde::{de::DeserializeOwned, Serialize};
 use sqlx::{Pool, Postgres};
-
 use std::sync::Arc;
 use thiserror::Error;
 
 use crate::{
     config::Config,
     db::resolver::{
-        delete_message_all, delete_message_by_id, list_messages, list_rows, message_by_id,
+        delete_message_all, delete_message_by_id, list_active_indexers, list_messages, list_rows,
+        message_by_id,
     },
     operator::radio_types::RadioPayloadMessage,
 };
@@ -54,6 +55,22 @@ impl QueryRoot {
 
         let rows: Vec<GraphQLRow<GraphcastMessage<RadioPayloadMessage>>> = list_rows(pool).await?;
         Ok(rows)
+    }
+
+    async fn query_active_indexers(
+        &self,
+        ctx: &Context<'_>,
+        indexers: Option<Vec<String>>,
+        minutes_ago: Option<i64>,
+    ) -> Result<Vec<String>, HttpServiceError> {
+        let pool = ctx.data_unchecked::<Pool<Postgres>>();
+        // Use a default time window if not specified
+        // Default to 1440 minutes (24 hours) if not provided
+        let minutes_ago = minutes_ago.unwrap_or(1440);
+        let from_timestamp = (Utc::now() - Duration::minutes(minutes_ago)).timestamp();
+
+        let active_indexers = list_active_indexers(pool, indexers, from_timestamp).await?;
+        Ok(active_indexers)
     }
 
     /// Grab a row from db by db entry id

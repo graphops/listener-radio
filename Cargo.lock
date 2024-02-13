@@ -3070,6 +3070,7 @@ dependencies = [
  "async-graphql-axum",
  "autometrics",
  "axum 0.5.17",
+ "chrono",
  "clap",
  "derive-getters",
  "dotenv",

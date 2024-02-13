@@ -13,7 +13,7 @@ use tracing::{debug, info, trace, warn};
 
 use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent};
 
-use crate::db::resolver::retain_max_storage;
+use crate::db::resolver::{prune_old_messages, retain_max_storage};
 use crate::metrics::{CONNECTED_PEERS, GOSSIP_PEERS, PRUNED_MESSAGES, RECEIVED_MESSAGES};
 use crate::{
     config::Config,
@@ -167,34 +167,48 @@ impl RadioOperator {
                         continue;
                     }
 
-                    // Prune old messages
-                    let num_pruned =
-                        match timeout(update_timeout,
-                            retain_max_storage(&self.db, self.config.max_storage.try_into().unwrap())
-                        ).await {
-                            Err(e) => {debug!(err = tracing::field::debug(e), "Pruning time out"); 0},
-                            Ok(Ok(num_pruned)) => {
-                                PRUNED_MESSAGES.set(num_pruned);
-                                num_pruned
-                            }
-                            Ok(Err(e)) => {
-                                warn!(err = tracing::field::debug(e), "Pruning time out"); 0
-                            }
-                        };
+                    let mut total_num_pruned: i64 = 0;
 
-                    // List the ones leftover
-                    let result = timeout(update_timeout,
-                        list_messages::<GraphcastMessage<PublicPoiMessage>>(&self.db)
-                    ).await;
+                    // Conditionally prune based on max_storage if provided
+                    if let Some(max_storage) = self.config.max_storage {
+                        let max_storage_usize = max_storage as usize;
+                        match timeout(
+                            update_timeout,
+                            retain_max_storage(&self.db, max_storage_usize)
+                        ).await {
+                            Err(e) => debug!(err = tracing::field::debug(e), "Pruning by max storage timed out"),
+                            Ok(Ok(num_pruned)) => {
+                                total_num_pruned += num_pruned;
+                                PRUNED_MESSAGES.set(total_num_pruned);
+                            },
+                            Ok(Err(e)) => warn!(err = tracing::field::debug(e), "Error during pruning by max storage"),
+                        };
+                    }
+
+                    // Always prune old messages based on RETENTION
+                    match timeout(
+                        update_timeout,
+                        prune_old_messages(&self.db, self.config.retention)
+                    ).await {
+                        Err(e) => debug!(err = tracing::field::debug(e), "Pruning by retention timed out"),
+                        Ok(Ok(num_pruned)) => {
+                            total_num_pruned += num_pruned;
+                            PRUNED_MESSAGES.set(total_num_pruned);
+                        },
+                        Ok(Err(e)) => warn!(err = tracing::field::debug(e), "Error during pruning by retention"),
+                    };
+
+                    // List the remaining messages
+                    let result = timeout(update_timeout, list_messages::<GraphcastMessage<PublicPoiMessage>>(&self.db)).await;
 
                     match result {
                         Err(e) => warn!(err = tracing::field::debug(e), "Public PoI messages summary timed out"),
                         Ok(msgs) => {
-                            let msg_num = &msgs.map_or(0, |m| m.len());
-                            CACHED_MESSAGES.set(*msg_num as i64);
+                            let msg_num = msgs.map_or(0, |m| m.len());
+                            CACHED_MESSAGES.set(msg_num as i64);
                             info!(total_messages = msg_num,
-                                num_pruned,
-                                "Monitoring summary"
+                                  total_num_pruned,
+                                  "Monitoring summary"
                             )
                         }
                     }
