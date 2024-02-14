@@ -22,6 +22,8 @@ jobs:
 
   check:
     name: Check
+    env:
+      SQLX_OFFLINE: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
