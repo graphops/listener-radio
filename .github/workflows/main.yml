@@ -1,17 +1,16 @@
-# copy of https://github.com/actions-rs/meta/blob/master/recipes/quickstart.md
+name: CI
+
 on:
   push:
     branches: [main]
   pull_request_review:
     types: [submitted]
 
-name: CI
-
 jobs:
   fmt:
     name: cargo fmt
     runs-on: ubuntu-latest
-    container: 
+    container:
       image: rust:latest
     steps:
       - uses: actions/checkout@v3
@@ -22,31 +21,23 @@ jobs:
   check:
     name: Check
     if: github.event.review.state == 'approved'
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            toolchain: stable-x86_64-unknown-linux-gnu
-          - os: macos-latest
-            toolchain: stable-x86_64-apple-darwin
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: true
       - name: Checkout submodules
         run: git submodule update --init --recursive
-      - uses: actions/setup-go@v4 # we need go to build go-waku
+      - uses: actions/setup-go@v4
         with:
           go-version: '1.19'
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.toolchain }}
+          toolchain: stable-x86_64-unknown-linux-gnu
           default: true
           override: true
       - uses: actions-rs/cargo@v1
-        continue-on-error: false
         with:
           command: check
       - name: Run Clippy
@@ -59,19 +50,32 @@ jobs:
     if: github.event.review.state == 'approved'
     strategy:
       matrix:
-        include:
-          - os: ubuntu-latest
-            toolchain: stable-x86_64-unknown-linux-gnu
-          - os: macos-latest
-            toolchain: stable-x86_64-apple-darwin
+        os: [ubuntu-latest]
+        toolchain: [stable-x86_64-unknown-linux-gnu]
     runs-on: ${{ matrix.os }}
+    services:
+      postgres:
+        image: postgres:12
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: true
       - name: Checkout submodules
         run: git submodule update --init --recursive
-      - uses: actions/setup-go@v4 # we need go to build go-waku
+      - uses: actions/setup-go@v4
         with:
           go-version: '1.19'
       - uses: actions-rs/toolchain@v1
@@ -80,11 +84,15 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           default: true
           override: true
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --version=0.6.0
+      - name: Run Database Migrations
+        run: cargo sqlx database create && cargo sqlx migrate run
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db
       - uses: actions-rs/cargo@v1
-        continue-on-error: false
         with:
           command: build
       - uses: actions-rs/cargo@v1
-        continue-on-error: false
         with:
           command: test

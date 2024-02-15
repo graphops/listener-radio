@@ -240,13 +240,8 @@ pub struct Config {
         default_value = "subgraph-radio"
     )]
     pub radio_name: String,
-    #[clap(
-        long,
-        value_name = "MAX_STORAGE",
-        env = "MAX_STORAGE",
-        default_value = "3000"
-    )]
-    pub max_storage: i32,
+    #[clap(long, value_name = "MAX_STORAGE", env = "MAX_STORAGE")]
+    pub max_storage: Option<i32>,
     #[clap(
         long,
         value_name = "ID_VALIDATION",
@@ -263,6 +258,13 @@ pub struct Config {
         indexer: must be registered at Graphcast Registry or is a Graph Account, correspond to and Indexer statisfying indexer minimum stake requirement"
     )]
     pub id_validation: IdentityValidation,
+    #[clap(
+        long,
+        value_name = "RETENTION",
+        env = "RETENTION",
+        default_value_t = 1440
+    )]
+    pub retention: i32,
 }
 
 impl Config {
