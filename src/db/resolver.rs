@@ -1,6 +1,7 @@
 use async_graphql::OutputType;
+use chrono::Utc;
 use serde::{de::DeserializeOwned, Serialize};
-use sqlx::{types::Json, PgPool};
+use sqlx::{types::Json, PgPool, Row as SqliteRow};
 use std::ops::Deref;
 use tracing::trace;
 
@@ -190,4 +191,221 @@ RETURNING id
     .len();
 
     Ok(deleted_ids.try_into().unwrap())
+}
+
+/// Function to delete messages older than `retention` minutes
+/// Returns the number of messages deleted
+pub async fn prune_old_messages(pool: &PgPool, retention: i32) -> Result<i64, anyhow::Error> {
+    let cutoff_nonce = Utc::now().timestamp() - (retention as i64 * 60);
+
+    let deleted_count = sqlx::query!(
+        r#"
+        DELETE FROM messages
+        WHERE (message->>'nonce')::bigint < $1
+        RETURNING id
+        "#,
+        cutoff_nonce
+    )
+    .fetch_all(pool)
+    .await?
+    .len() as i64;
+
+    Ok(deleted_count)
+}
+
+pub async fn list_active_indexers(
+    pool: &PgPool,
+    indexers: Option<Vec<String>>,
+    from_timestamp: i64,
+) -> Result<Vec<String>, anyhow::Error> {
+    let mut query = String::from("SELECT DISTINCT message->>'graph_account' as graph_account FROM messages WHERE (CAST(message->>'nonce' AS BIGINT)) > $1");
+
+    // Dynamically add placeholders for indexers if provided.
+    if let Some(ref idxs) = indexers {
+        let placeholders = idxs
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("${}", i + 2))
+            .collect::<Vec<_>>()
+            .join(",");
+        query.push_str(&format!(
+            " AND (message->>'graph_account') IN ({})",
+            placeholders
+        ));
+    }
+
+    let mut query = sqlx::query(&query).bind(from_timestamp);
+
+    // Bind indexers to the query if provided.
+    if let Some(indexers) = indexers {
+        for account in indexers {
+            query = query.bind(account);
+        }
+    }
+
+    let rows = query
+        .fetch_all(pool)
+        .await
+        .map_err(anyhow::Error::new)?
+        .iter()
+        .map(|row| row.get::<String, _>("graph_account"))
+        .collect();
+
+    Ok(rows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::message_types::PublicPoiMessage;
+    use sqlx::PgPool;
+
+    async fn insert_test_data(pool: &PgPool, entries: Vec<(i64, &str)>) {
+        for (nonce, graph_account) in entries {
+            let message = PublicPoiMessage {
+                identifier: "QmTamam".to_string(),
+                content: "0xText".to_string(),
+                nonce: nonce.try_into().unwrap(),
+                network: "testnet".to_string(),
+                block_number: 1,
+                block_hash: "hash".to_string(),
+                graph_account: graph_account.to_string(),
+            };
+
+            add_message(pool, message)
+                .await
+                .expect("Failed to insert test data");
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn test_list_active_indexers_without_indexers(pool: PgPool) {
+        insert_test_data(
+            &pool,
+            vec![(1707328517, "0xb4b4570df6f7fe320f10fdfb702dba7e35244550")],
+        )
+        .await;
+
+        let from_timestamp = 1707328516;
+        let indexers = None;
+        let result = list_active_indexers(&pool, indexers, from_timestamp)
+            .await
+            .expect("Function should complete successfully");
+
+        assert!(
+            result.contains(&"0xb4b4570df6f7fe320f10fdfb702dba7e35244550".to_string()),
+            "Result should contain the expected graph_account"
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn test_list_active_indexers_with_specific_indexers(pool: PgPool) {
+        insert_test_data(
+            &pool,
+            vec![(1707328517, "0xb4b4570df6f7fe320f10fdfb702dba7e35244550")],
+        )
+        .await;
+
+        let from_timestamp = 1707328516;
+        let indexers = Some(vec![
+            "0xb4b4570df6f7fe320f10fdfb702dba7e35244550".to_string(),
+            "nonexistent_indexer".to_string(),
+        ]);
+        let result = list_active_indexers(&pool, indexers, from_timestamp)
+            .await
+            .expect("Function should complete successfully");
+
+        assert_eq!(
+            result.len(),
+            1,
+            "Should only match records for existing indexers"
+        );
+        assert!(
+            result.contains(&"0xb4b4570df6f7fe320f10fdfb702dba7e35244550".to_string()),
+            "Result should contain the expected graph_account"
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn test_list_active_indexers_no_matching_records(pool: PgPool) {
+        let from_timestamp = 9999999999;
+        let indexers = None;
+        let result = list_active_indexers(&pool, indexers, from_timestamp)
+            .await
+            .expect("Function should complete successfully");
+
+        assert!(
+            result.is_empty(),
+            "Result should be empty when no records match criteria"
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn test_list_active_indexers_edge_cases(pool: PgPool) {
+        let specific_nonce = Utc::now().timestamp();
+        insert_test_data(
+            &pool,
+            vec![(specific_nonce, "0xb4b4570df6f7fe320f10fdfb702dba7e35244550")],
+        )
+        .await;
+
+        let from_timestamp = specific_nonce;
+        let indexers = None;
+        let result = list_active_indexers(&pool, indexers, from_timestamp)
+            .await
+            .expect("Function should complete successfully");
+
+        assert!(
+            result.is_empty(),
+            "Result should be empty when from_timestamp exactly matches nonce"
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn test_list_active_indexers_with_partial_matching_indexers(pool: PgPool) {
+        insert_test_data(
+            &pool,
+            vec![
+                (1707328517, "0xb4b4570df6f7fe320f10fdfb702dba7e35244550"),
+                (1707328518, "some_other_account"),
+            ],
+        )
+        .await;
+
+        let from_timestamp = 1707328516;
+        let indexers = Some(vec![
+            "0xb4b4570df6f7fe320f10fdfb702dba7e35244550".to_string(),
+            "partial_match_indexer".to_string(),
+        ]);
+        let result = list_active_indexers(&pool, indexers, from_timestamp)
+            .await
+            .expect("Function should complete successfully");
+
+        assert_eq!(
+            result.len(),
+            1,
+            "Should only match records for existing indexers"
+        );
+        assert!(
+            result.contains(&"0xb4b4570df6f7fe320f10fdfb702dba7e35244550".to_string()),
+            "Result should contain the expected graph_account"
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn test_list_active_indexers_with_nonexistent_indexers(pool: PgPool) {
+        let from_timestamp = 1707328516;
+        let indexers = Some(vec![
+            "nonexistent_indexer_1".to_string(),
+            "nonexistent_indexer_2".to_string(),
+        ]);
+        let result = list_active_indexers(&pool, indexers, from_timestamp)
+            .await
+            .expect("Function should complete successfully");
+
+        assert!(
+            result.is_empty(),
+            "Result should be empty for non-existent indexers"
+        );
+    }
 }
