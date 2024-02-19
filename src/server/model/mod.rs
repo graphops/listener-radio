@@ -9,8 +9,8 @@ use thiserror::Error;
 use crate::{
     config::Config,
     db::resolver::{
-        delete_message_all, delete_message_by_id, list_active_indexers, list_messages, list_rows,
-        message_by_id,
+        delete_message_all, delete_message_by_id, get_indexer_stats, list_active_indexers,
+        list_messages, list_rows, message_by_id, IndexerStats,
     },
     operator::radio_types::RadioPayloadMessage,
 };
@@ -71,6 +71,20 @@ impl QueryRoot {
 
         let active_indexers = list_active_indexers(pool, indexers, from_timestamp).await?;
         Ok(active_indexers)
+    }
+
+    async fn query_indexer_stats(
+        &self,
+        ctx: &Context<'_>,
+        indexers: Option<Vec<String>>,
+        minutes_ago: Option<i64>,
+    ) -> Result<Vec<IndexerStats>, HttpServiceError> {
+        let pool = ctx.data_unchecked::<Pool<Postgres>>();
+        let minutes_ago = minutes_ago.unwrap_or(1440);
+        let from_timestamp = (Utc::now() - Duration::minutes(minutes_ago)).timestamp();
+
+        let stats = get_indexer_stats(pool, indexers, from_timestamp).await?;
+        Ok(stats)
     }
 
     /// Grab a row from db by db entry id
