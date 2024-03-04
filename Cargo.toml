@@ -44,4 +44,4 @@ tracing-subscriber = { version = "0.3", features = [
 ] }
 tokio = { version = "1.28.1", features = ["full", "rt"] }
 chrono = "0.4.33"
-
+tower-http = { version = "0.4.0", features = ["trace", "cors"] }
