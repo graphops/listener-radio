@@ -9,6 +9,7 @@ RUN apt-get update \
         libssl-dev \
         clang \
         build-essential \
+        libc6-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,6 +24,8 @@ ARG DATABASE_URL=postgresql://postgres:password@localhost:5432/postgres
 RUN echo "DATABASE_URL=postgresql://postgres:password@localhost:5432/postgres" > .env
 RUN ls
 ENV PATH=$PATH:/usr/local/go/bin
+
+ENV RUSTFLAGS="-C link-arg=-lresolv"
 
 RUN cargo build --release
 

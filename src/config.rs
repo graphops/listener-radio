@@ -2,13 +2,9 @@ use clap::Parser;
 use derive_getters::Getters;
 use ethers::signers::WalletError;
 use graphcast_sdk::{
-    build_wallet,
-    callbook::CallBook,
-    graphcast_agent::{
+    build_wallet, callbook::CallBook, cf_nameserver, graphcast_agent::{
         message_typing::IdentityValidation, GraphcastAgentConfig, GraphcastAgentError,
-    },
-    graphql::QueryError,
-    init_tracing, wallet_address, GraphcastNetworkName, LogFormat,
+    }, graphql::QueryError, init_tracing, wallet_address, GraphcastNetworkName, LogFormat
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -322,6 +318,8 @@ impl Config {
             self.filter_protocol,
             self.discv5_enrs.clone(),
             self.discv5_port,
+            self.discv5_enrs().clone().unwrap_or(vec![]),
+            Some(cf_nameserver().to_string())
         )
         .await
     }
