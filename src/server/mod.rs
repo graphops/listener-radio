@@ -6,6 +6,7 @@ use std::{
 
 use axum::{extract::Extension, routing::get, Router, Server};
 use sqlx::{Pool, Postgres};
+use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 use tracing::{debug, info};
 
 use crate::{
@@ -34,12 +35,19 @@ pub async fn run_server(config: Config, db: Pool<Postgres>, _running_program: Ar
 
     debug!("Setting up HTTP service");
 
+    // Configure CORS
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::any())
+        .allow_methods(AllowMethods::any())
+        .allow_headers(AllowHeaders::any());
+
     let app = Router::new()
         .route("/health", get(health))
         .route(
             "/api/v1/graphql",
             get(graphql_playground).post(graphql_handler),
         )
+        .layer(cors)
         .layer(Extension(schema))
         .layer(Extension(context));
     let addr = SocketAddr::from_str(&format!("{}:{}", config.server_host(), port))
