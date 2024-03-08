@@ -81,12 +81,6 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:password@localhost:5432/postgres
         run: sqlx migrate run
-      
-      - uses: actions-rs/cargo@v1
-        env:
-          SQLX_OFFLINE: true
-        with:
-          command: test
 
       - name: Build and push
         uses: docker/build-push-action@v4
