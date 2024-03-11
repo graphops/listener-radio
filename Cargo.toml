@@ -1,6 +1,6 @@
 [package]
 name = "listener-radio"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 authors = ["GraphOps (hopeyen)"]
 description = "Listener Radio monitors on a Graphcast network and stores messages"

@@ -37,6 +37,9 @@ All notable changes to this project will be documented in this file.
 - Network metrics on peers, connectivity, msg traffic
 - Prune old messages by max_storage config, update logs and metrics
 - Grafana dashboard json setup
+- Add active Indexers query (#31)
+- Add high level message stats query (#32)
+- Enable cors (#35)
 
 ### Miscellaneous Tasks
 
@@ -49,7 +52,8 @@ All notable changes to this project will be documented in this file.
 - Move clippy step into check job
 - Remove labels workflow (#21)
 - Update Graphcast SDK and fix conflicts (#27)
-- Release 0.0.3
+- 0.0.3 (#30)
+- 0.0.4
 
 ### Performance
 
