@@ -1,9 +1,9 @@
 use async_graphql::{Context, EmptySubscription, Object, OutputType, Schema, SimpleObject};
 
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use serde::{de::DeserializeOwned, Serialize};
 use sqlx::{Pool, Postgres};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use thiserror::Error;
 
 use crate::{
@@ -61,13 +61,13 @@ impl QueryRoot {
         &self,
         ctx: &Context<'_>,
         indexers: Option<Vec<String>>,
-        minutes_ago: Option<i64>,
+        minutes_ago: Option<u64>,
     ) -> Result<Vec<String>, HttpServiceError> {
         let pool = ctx.data_unchecked::<Pool<Postgres>>();
         // Use a default time window if not specified
         // Default to 1440 minutes (24 hours) if not provided
         let minutes_ago = minutes_ago.unwrap_or(1440);
-        let from_timestamp = (Utc::now() - Duration::minutes(minutes_ago)).timestamp();
+        let from_timestamp = (Utc::now() - Duration::from_secs(minutes_ago * 60)).timestamp();
 
         let active_indexers = list_active_indexers(pool, indexers, from_timestamp).await?;
         Ok(active_indexers)
@@ -77,11 +77,11 @@ impl QueryRoot {
         &self,
         ctx: &Context<'_>,
         indexers: Option<Vec<String>>,
-        minutes_ago: Option<i64>,
+        minutes_ago: Option<u64>,
     ) -> Result<Vec<IndexerStats>, HttpServiceError> {
         let pool = ctx.data_unchecked::<Pool<Postgres>>();
         let minutes_ago = minutes_ago.unwrap_or(1440);
-        let from_timestamp = (Utc::now() - Duration::minutes(minutes_ago)).timestamp();
+        let from_timestamp = (Utc::now() - Duration::from_secs(minutes_ago * 60)).timestamp();
 
         let stats = get_indexer_stats(pool, indexers, from_timestamp).await?;
         Ok(stats)

@@ -185,11 +185,12 @@ impl RadioOperator {
                         };
                     }
 
+                    let batch_size = 1000;
+
                     // Always prune old messages based on RETENTION
                     match timeout(
                         update_timeout,
-                        prune_old_messages(&self.db, self.config.retention)
-                    ).await {
+                        prune_old_messages(&self.db, self.config.retention, batch_size)                    ).await {
                         Err(e) => debug!(err = tracing::field::debug(e), "Pruning by retention timed out"),
                         Ok(Ok(num_pruned)) => {
                             total_num_pruned += num_pruned;
