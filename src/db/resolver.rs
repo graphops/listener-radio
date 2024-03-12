@@ -1,7 +1,7 @@
 use async_graphql::{OutputType, SimpleObject};
 use chrono::Utc;
 use serde::{de::DeserializeOwned, Serialize};
-use sqlx::{types::Json, FromRow, PgPool, Row as SqliteRow};
+use sqlx::{postgres::PgQueryResult, types::Json, FromRow, PgPool, Row as SqliteRow};
 use std::ops::Deref;
 use tracing::trace;
 
@@ -81,6 +81,23 @@ ORDER BY id
     })?;
 
     Ok(rows)
+}
+
+pub async fn count_messages(pool: &PgPool) -> anyhow::Result<i64> {
+    let result = sqlx::query!(
+        r#"
+        SELECT COUNT(*) as "count!: i64"
+        FROM messages
+        "#
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(|e| {
+        trace!("Database query error: {:#?}", e);
+        anyhow::Error::new(e)
+    })?;
+
+    Ok(result.count)
 }
 
 pub async fn list_rows<T>(pool: &PgPool) -> Result<Vec<GraphQLRow<T>>, anyhow::Error>
@@ -201,24 +218,51 @@ RETURNING id
     Ok(deleted_ids.try_into().unwrap())
 }
 
-/// Function to delete messages older than `retention` minutes
-/// Returns the number of messages deleted
-pub async fn prune_old_messages(pool: &PgPool, retention: i32) -> Result<i64, anyhow::Error> {
+/// Function to delete messages older than `retention` minutes in batches
+/// Returns the total number of messages deleted
+/// Arguments:
+/// - `pool`: &PgPool - A reference to the PostgreSQL connection pool
+/// - `retention`: i32 - The retention time in minutes
+/// - `batch_size`: i64 - The number of messages to delete in each batch
+pub async fn prune_old_messages(
+    pool: &PgPool,
+    retention: i32,
+    batch_size: i64,
+) -> Result<i64, anyhow::Error> {
     let cutoff_nonce = Utc::now().timestamp() - (retention as i64 * 60);
+    let mut total_deleted = 0i64;
 
-    let deleted_count = sqlx::query!(
-        r#"
-        DELETE FROM messages
-        WHERE (message->>'nonce')::bigint < $1
-        RETURNING id
-        "#,
-        cutoff_nonce
-    )
-    .fetch_all(pool)
-    .await?
-    .len() as i64;
+    loop {
+        let delete_query = sqlx::query(
+            r#"
+            WITH deleted AS (
+                SELECT id
+                FROM messages
+                WHERE (message->>'nonce')::bigint < $1
+                ORDER BY id ASC
+                LIMIT $2
+                FOR UPDATE SKIP LOCKED
+            )
+            DELETE FROM messages
+            WHERE id IN (SELECT id FROM deleted)
+            RETURNING id
+            "#,
+        )
+        .bind(cutoff_nonce)
+        .bind(batch_size);
 
-    Ok(deleted_count)
+        let result: PgQueryResult = delete_query.execute(pool).await?;
+        let deleted_count = result.rows_affected() as i64;
+
+        total_deleted += deleted_count;
+
+        // Break the loop if we deleted fewer rows than the batch size, indicating we've processed all eligible messages.
+        if deleted_count < batch_size {
+            break;
+        }
+    }
+
+    Ok(total_deleted)
 }
 
 pub async fn list_active_indexers(
