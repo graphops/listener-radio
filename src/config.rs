@@ -323,7 +323,7 @@ impl Config {
             self.filter_protocol,
             self.discv5_enrs.clone(),
             self.discv5_port,
-            self.discv5_enrs().clone().unwrap_or(vec![]),
+            self.discv5_enrs().clone().unwrap_or_default(),
             Some(cf_nameserver().to_string()),
         )
         .await

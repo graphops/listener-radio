@@ -13,11 +13,11 @@ use tracing::{debug, info, trace, warn};
 
 use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent};
 
-use crate::db::resolver::{prune_old_messages, retain_max_storage};
+use crate::db::resolver::{count_messages, prune_old_messages, retain_max_storage};
 use crate::metrics::{CONNECTED_PEERS, GOSSIP_PEERS, PRUNED_MESSAGES, RECEIVED_MESSAGES};
 use crate::{
     config::Config,
-    db::resolver::{add_message, list_messages},
+    db::resolver::add_message,
     message_types::{PublicPoiMessage, SimpleMessage, UpgradeIntentMessage},
     metrics::{handle_serve_metrics, ACTIVE_PEERS, CACHED_MESSAGES},
     server::run_server,
@@ -109,7 +109,7 @@ impl RadioOperator {
         let skip_iteration_clone = skip_iteration.clone();
 
         let mut network_update_interval = interval(Duration::from_secs(600));
-        let mut comparison_interval = interval(Duration::from_secs(30));
+        let mut summary_interval = interval(Duration::from_secs(180));
 
         let iteration_timeout = Duration::from_secs(180);
         let update_timeout = Duration::from_secs(5);
@@ -160,7 +160,7 @@ impl RadioOperator {
                             .set(self.graphcast_agent.number_of_peers().try_into().unwrap());
                     }
                 },
-                _ = comparison_interval.tick() => {
+                _ = summary_interval.tick() => {
                     trace!("Local summary update");
                     if skip_iteration.load(Ordering::SeqCst) {
                         skip_iteration.store(false, Ordering::SeqCst);
@@ -185,10 +185,12 @@ impl RadioOperator {
                         };
                     }
 
+                    let batch_size = 1000;
+
                     // Always prune old messages based on RETENTION
                     match timeout(
                         update_timeout,
-                        prune_old_messages(&self.db, self.config.retention)
+                        prune_old_messages(&self.db, self.config.retention, batch_size)
                     ).await {
                         Err(e) => debug!(err = tracing::field::debug(e), "Pruning by retention timed out"),
                         Ok(Ok(num_pruned)) => {
@@ -199,14 +201,13 @@ impl RadioOperator {
                     };
 
                     // List the remaining messages
-                    let result = timeout(update_timeout, list_messages::<GraphcastMessage<PublicPoiMessage>>(&self.db)).await;
+                    let result = timeout(update_timeout, count_messages(&self.db)).await.expect("could not count messages");
 
                     match result {
-                        Err(e) => warn!(err = tracing::field::debug(e), "Public PoI messages summary timed out"),
-                        Ok(msgs) => {
-                            let msg_num = msgs.map_or(0, |m| m.len());
-                            CACHED_MESSAGES.set(msg_num as i64);
-                            info!(total_messages = msg_num,
+                        Err(e) => warn!(err = tracing::field::debug(e), "Database query for message count timed out"),
+                        Ok(count) => {
+                            CACHED_MESSAGES.set(count);
+                            info!(total_messages = count,
                                   total_num_pruned,
                                   "Monitoring summary"
                             )
