@@ -9,8 +9,7 @@ use thiserror::Error;
 use crate::{
     config::Config,
     db::resolver::{
-        delete_message_all, delete_message_by_id, get_indexer_stats, list_active_indexers,
-        list_messages, list_rows, message_by_id, IndexerStats,
+        delete_message_all, delete_message_by_id, get_daily_metrics, get_indexer_stats, list_active_indexers, list_messages, list_rows, message_by_id, IndexerStats
     },
     operator::radio_types::RadioPayloadMessage,
 };
@@ -85,6 +84,24 @@ impl QueryRoot {
 
         let stats = get_indexer_stats(pool, indexers, from_timestamp).await?;
         Ok(stats)
+    }
+
+    async fn query_last_month_daily_metrics(
+        &self,
+        ctx: &Context<'_>,
+        days: Option<u64>,
+    ) -> Result<Vec<IndexerStats>, HttpServiceError> {
+        let pool = ctx.data_unchecked::<Pool<Postgres>>();
+
+        // Use the provided number of days or default to 30 days
+        let days = days.unwrap_or(30);
+        let start_timestamp = (Utc::now() - Duration::from_secs(days * 24 * 60 * 60)).timestamp();
+        let end_timestamp = Utc::now().timestamp();
+
+        let metrics = get_daily_metrics(pool, start_timestamp, end_timestamp).await
+            .map_err(|e| HttpServiceError::Others(e.into()))?;
+        
+        Ok(metrics)
     }
 
     /// Grab a row from db by db entry id

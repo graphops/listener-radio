@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT data as \"data: Json<IndexerStats>\"\n        FROM daily_metrics\n        WHERE timestamp BETWEEN $1 AND $2\n        ORDER BY timestamp\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data: Json<IndexerStats>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e62858eb54b364d39469602fce72bd4efdfa4b5a3d0b68d29a908411d6e2aa0d"
+}

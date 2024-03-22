@@ -1,6 +1,6 @@
 use async_graphql::{OutputType, SimpleObject};
 use chrono::Utc;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sqlx::{postgres::PgQueryResult, types::Json, FromRow, PgPool, Row as SqliteRow};
 use std::ops::Deref;
 use tracing::trace;
@@ -21,11 +21,17 @@ pub struct MessageID {
 }
 
 #[allow(dead_code)]
-#[derive(FromRow, SimpleObject, Serialize, Debug, Clone)]
+#[derive(FromRow, SimpleObject, Serialize, Debug, Clone, Deserialize)]
 pub struct IndexerStats {
     graph_account: String,
     message_count: i64,
     subgraphs_count: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct DailyMetric {
+    timestamp: i64,
+    data: IndexerStats,
 }
 
 // Define graphql type for the Row in Messages
@@ -350,6 +356,42 @@ pub async fn get_indexer_stats(
         .map_err(anyhow::Error::new)?;
 
     Ok(stats)
+}
+
+pub async fn add_daily_metric(pool: &PgPool, data: Vec<IndexerStats>) -> anyhow::Result<()> {
+    for stat in data {
+        let data_json = serde_json::to_value(stat)?;
+        sqlx::query!(
+            r#"
+            INSERT INTO daily_metrics (timestamp, data)
+            VALUES ($1, $2)
+            "#,
+            Utc::now().timestamp(),
+            data_json
+        )
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
+}
+pub async fn get_daily_metrics(pool: &PgPool, start_timestamp: i64, end_timestamp: i64) -> anyhow::Result<Vec<IndexerStats>> {
+    let metrics = sqlx::query!(
+        r#"
+        SELECT data as "data: Json<IndexerStats>"
+        FROM daily_metrics
+        WHERE timestamp BETWEEN $1 AND $2
+        ORDER BY timestamp
+        "#,
+        start_timestamp,
+        end_timestamp
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|record| record.data.0)
+    .collect::<Vec<IndexerStats>>();
+    
+    Ok(metrics)
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use chrono::Utc;
 use graphcast_sdk::WakuMessage;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
@@ -13,7 +14,7 @@ use tracing::{debug, info, trace, warn};
 
 use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent};
 
-use crate::db::resolver::{count_messages, prune_old_messages, retain_max_storage};
+use crate::db::resolver::{add_daily_metric, count_messages, get_indexer_stats, prune_old_messages, retain_max_storage};
 use crate::metrics::{CONNECTED_PEERS, GOSSIP_PEERS, PRUNED_MESSAGES, RECEIVED_MESSAGES};
 use crate::{
     config::Config,
@@ -113,6 +114,7 @@ impl RadioOperator {
 
         let iteration_timeout = Duration::from_secs(180);
         let update_timeout = Duration::from_secs(5);
+        let mut daily_metrics_interval = interval(Duration::from_secs(24 * 60 * 60));
 
         // Separate thread to skip a main loop iteration when hit timeout
         tokio::spawn(async move {
@@ -214,6 +216,29 @@ impl RadioOperator {
                         }
                     }
                 },
+                _ = daily_metrics_interval.tick() => {
+                    trace!("Adding new daily metric");
+                    if skip_iteration.load(Ordering::SeqCst) {
+                        skip_iteration.store(false, Ordering::SeqCst);
+                        continue;
+                    }
+                
+                    // Assuming `self.db` is your database pool and is correctly accessible here.
+                    let pool = self.db.clone(); // Clone the pool if necessary
+                    let minutes_ago = 1440; // 24 hours
+                    let from_timestamp = (Utc::now() - Duration::from_secs(minutes_ago * 60)).timestamp();
+                
+                    // Perform the operation with timeout and error handling similar to other blocks
+                    match timeout(update_timeout, async move {
+                        let stats = get_indexer_stats(&pool, None, from_timestamp).await?;
+                        add_daily_metric(&pool, stats).await
+                    }).await {
+                        Err(e) => warn!(err = tracing::field::debug(e), "Adding daily metric timed out or was interrupted"),
+                        Ok(Err(e)) => warn!(err = tracing::field::debug(e), "Error during adding daily metric"),
+                        Ok(Ok(_)) => info!("Daily metric added successfully"),
+                    }
+                },
+                
                 else => break,
             }
 
