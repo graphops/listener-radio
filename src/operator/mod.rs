@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use chrono::Utc;
 use graphcast_sdk::WakuMessage;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
@@ -13,7 +14,9 @@ use tracing::{debug, info, trace, warn};
 
 use graphcast_sdk::graphcast_agent::{message_typing::GraphcastMessage, GraphcastAgent};
 
-use crate::db::resolver::{count_messages, prune_old_messages, retain_max_storage};
+use crate::db::resolver::{
+    count_messages, get_indexer_stats, insert_aggregate, prune_old_messages, retain_max_storage,
+};
 use crate::metrics::{CONNECTED_PEERS, GOSSIP_PEERS, PRUNED_MESSAGES, RECEIVED_MESSAGES};
 use crate::{
     config::Config,
@@ -110,6 +113,7 @@ impl RadioOperator {
 
         let mut network_update_interval = interval(Duration::from_secs(600));
         let mut summary_interval = interval(Duration::from_secs(180));
+        let mut daily_aggregate_interval = interval(Duration::from_secs(86400)); // 24 hours
 
         let iteration_timeout = Duration::from_secs(180);
         let update_timeout = Duration::from_secs(5);
@@ -214,6 +218,28 @@ impl RadioOperator {
                         }
                     }
                 },
+                _ = daily_aggregate_interval.tick() => {
+                    if skip_iteration.load(Ordering::SeqCst) {
+                        skip_iteration.store(false, Ordering::SeqCst);
+                        continue;
+                    }
+
+                    let pool = &self.db;
+                    let from_timestamp = (Utc::now() - Duration::from_secs(86400)).timestamp();
+
+                    match get_indexer_stats(pool, None, from_timestamp).await {
+                        Ok(stats) => {
+                            for stat in stats {
+                                match insert_aggregate(pool, Utc::now().timestamp(), stat.graph_account, stat.message_count, stat.subgraphs_count).await {
+                                    Ok(_) => warn!("Successfully inserted daily aggregate."),
+                                    Err(e) => warn!("Failed to insert daily aggregate: {:?}", e),
+                                }
+                            }
+                        },
+                        Err(e) => warn!("Failed to fetch indexer stats: {:?}", e),
+                    }
+                },
+
                 else => break,
             }
 
