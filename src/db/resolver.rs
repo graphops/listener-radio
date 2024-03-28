@@ -1,6 +1,6 @@
 use async_graphql::{OutputType, SimpleObject};
 use chrono::Utc;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sqlx::{postgres::PgQueryResult, types::Json, FromRow, PgPool, Row as SqliteRow};
 use std::ops::Deref;
 use tracing::trace;
@@ -21,11 +21,11 @@ pub struct MessageID {
 }
 
 #[allow(dead_code)]
-#[derive(FromRow, SimpleObject, Serialize, Debug, Clone)]
+#[derive(FromRow, SimpleObject, Serialize, Deserialize, Debug, Clone)]
 pub struct IndexerStats {
-    graph_account: String,
-    message_count: i64,
-    subgraphs_count: i64,
+    pub graph_account: String,
+    pub message_count: i64,
+    pub subgraphs_count: i64,
 }
 
 // Define graphql type for the Row in Messages
@@ -315,7 +315,7 @@ pub async fn get_indexer_stats(
         SELECT 
             message->>'graph_account' as graph_account, 
             COUNT(*) as message_count, 
-            COUNT(DISTINCT message->>'identifier') as subgraphs_count -- Updated field name
+            COUNT(DISTINCT message->>'identifier') as subgraphs_count
         FROM messages 
         WHERE (CAST(message->>'nonce' AS BIGINT)) > $1";
 
@@ -350,6 +350,80 @@ pub async fn get_indexer_stats(
         .map_err(anyhow::Error::new)?;
 
     Ok(stats)
+}
+
+pub async fn insert_aggregate(
+    pool: &PgPool,
+    timestamp: i64,
+    graph_account: String,
+    message_count: i64,
+    subgraphs_count: i64,
+) -> anyhow::Result<()> {
+    let _ = sqlx::query!(
+        "INSERT INTO indexer_aggregates (timestamp, graph_account, message_count, subgraphs_count) VALUES ($1, $2, $3, $4)",
+        timestamp,
+        graph_account,
+        message_count,
+        subgraphs_count
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn fetch_aggregates(
+    pool: &PgPool,
+    since_timestamp: i64,
+) -> Result<Vec<IndexerStats>, anyhow::Error> {
+    let aggregates = sqlx::query_as!(
+        Aggregate,
+        "SELECT timestamp, graph_account, message_count, subgraphs_count FROM indexer_aggregates WHERE timestamp > $1",
+        since_timestamp
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(anyhow::Error::new)?;
+
+    let results: Vec<IndexerStats> = aggregates
+        .clone()
+        .into_iter()
+        .map(|agg| IndexerStats {
+            graph_account: agg.graph_account,
+            message_count: agg.message_count,
+            subgraphs_count: agg.subgraphs_count,
+        })
+        .collect();
+
+    Ok(results)
+}
+
+pub async fn count_distinct_subgraphs(
+    pool: &PgPool,
+    from_timestamp: i64,
+) -> Result<i64, anyhow::Error> {
+    let result = sqlx::query!(
+        "
+        SELECT COUNT(DISTINCT message->>'identifier') AS count
+        FROM messages
+        WHERE (CAST(message->>'nonce' AS BIGINT)) > $1
+        ",
+        from_timestamp
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(anyhow::Error::new)?;
+
+    Ok(result.count.unwrap_or(0) as i64)
+}
+
+#[allow(dead_code)]
+#[derive(sqlx::FromRow, Debug, Clone)]
+struct Aggregate {
+    timestamp: i64,
+    graph_account: String,
+    message_count: i64,
+    subgraphs_count: i64,
 }
 
 #[cfg(test)]

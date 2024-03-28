@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(DISTINCT message->>'identifier') AS count\n        FROM messages\n        WHERE (CAST(message->>'nonce' AS BIGINT)) > $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "339014f817c328ecfca7006d96e74330704535d8e5b0ca83aa3c8883e7f74713"
+}

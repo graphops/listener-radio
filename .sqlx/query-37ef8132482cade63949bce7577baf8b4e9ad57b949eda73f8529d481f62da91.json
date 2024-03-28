@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO indexer_aggregates (timestamp, graph_account, message_count, subgraphs_count) VALUES ($1, $2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Varchar",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "37ef8132482cade63949bce7577baf8b4e9ad57b949eda73f8529d481f62da91"
+}

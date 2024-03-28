@@ -3,14 +3,16 @@ use async_graphql::{Context, EmptySubscription, Object, OutputType, Schema, Simp
 use chrono::Utc;
 use serde::{de::DeserializeOwned, Serialize};
 use sqlx::{Pool, Postgres};
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use thiserror::Error;
+use tracing::error;
 
 use crate::{
     config::Config,
     db::resolver::{
-        delete_message_all, delete_message_by_id, get_indexer_stats, list_active_indexers,
-        list_messages, list_rows, message_by_id, IndexerStats,
+        count_distinct_subgraphs, delete_message_all, delete_message_by_id, fetch_aggregates,
+        get_indexer_stats, list_active_indexers, list_messages, list_rows, message_by_id,
+        IndexerStats,
     },
     operator::radio_types::RadioPayloadMessage,
 };
@@ -33,6 +35,13 @@ impl RadioContext {
     pub fn init(radio_config: Config, db: Pool<Postgres>) -> Self {
         Self { radio_config, db }
     }
+}
+
+#[derive(Serialize, SimpleObject)]
+pub struct Summary {
+    total_message_count: HashMap<String, i64>,
+    average_subgraphs_count: HashMap<String, i64>,
+    total_subgraphs_covered: i64,
 }
 
 // Unified query object for resolvers
@@ -126,6 +135,62 @@ impl QueryRoot {
         let msg: GraphcastMessage<RadioPayloadMessage> =
             message_by_id(pool, id).await?.get_message();
         Ok(msg)
+    }
+
+    async fn query_aggregate_stats(
+        &self,
+        ctx: &Context<'_>,
+        days: i32,
+    ) -> Result<Summary, HttpServiceError> {
+        let pool = ctx.data_unchecked::<Pool<Postgres>>();
+
+        let since_timestamp =
+            (Utc::now() - chrono::Duration::try_days(days.into()).unwrap()).timestamp();
+        let aggregates = fetch_aggregates(pool, since_timestamp)
+            .await
+            .map_err(HttpServiceError::Others)?;
+
+        let mut total_message_count: HashMap<String, i64> = HashMap::new();
+        let mut total_subgraphs_count: HashMap<String, i64> = HashMap::new();
+
+        let mut subgraphs_counts = HashMap::new();
+
+        for stat in aggregates {
+            *total_message_count
+                .entry(stat.graph_account.clone())
+                .or_default() += stat.message_count;
+            *total_subgraphs_count
+                .entry(stat.graph_account.clone())
+                .or_default() += stat.subgraphs_count;
+            subgraphs_counts
+                .entry(stat.graph_account.clone())
+                .or_insert_with(Vec::new)
+                .push(stat.subgraphs_count);
+        }
+
+        let average_subgraphs_count: HashMap<String, i64> = total_subgraphs_count
+            .iter()
+            .map(|(key, &total_count)| {
+                let count = subgraphs_counts.get(key).map_or(1, |counts| counts.len());
+                (
+                    key.clone(),
+                    if count > 0 {
+                        (total_count as f64 / count as f64).ceil() as i64
+                    } else {
+                        0
+                    },
+                )
+            })
+            .collect();
+
+        let total_subgraphs_covered = count_distinct_subgraphs(pool, since_timestamp)
+            .await
+            .map_err(HttpServiceError::Others)?;
+        Ok(Summary {
+            total_message_count,
+            average_subgraphs_count,
+            total_subgraphs_covered,
+        })
     }
 }
 
