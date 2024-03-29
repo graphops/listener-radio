@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM indexer_aggregates WHERE timestamp < $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1250005571c00e3619803b857b4dd8246c5fb0ece6d3536bbf4046b83eb1dbdb"
+}
