@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT graph_account, message_count, subgraphs_count FROM indexer_aggregates WHERE timestamp > $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "graph_account",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "subgraphs_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d5d98636783ca4170bc41ffa76f76b666eb2c524086334561cd6b9f2d0936083"
+}
