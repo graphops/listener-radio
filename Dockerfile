@@ -22,25 +22,24 @@ RUN sh install-golang.sh
 ARG SQLX_OFFLINE=true
 ARG DATABASE_URL=postgresql://postgres:password@localhost:5432/postgres
 RUN echo "DATABASE_URL=postgresql://postgres:password@localhost:5432/postgres" > .env
-RUN ls
 ENV PATH=$PATH:/usr/local/go/bin
 
 ENV RUSTFLAGS="-C link-arg=-lresolv"
 
 RUN cargo build --release
 
-FROM alpine:3.17.3 as alpine
+FROM alpine:3.17.3 AS alpine
 RUN set -x \
     && apk update \
     && apk add --no-cache upx dumb-init
 COPY --from=build-image /listener-radio/target/release/listener-radio /listener-radio/target/release/listener-radio
-RUN upx --overlay=strip --best /listener-radio/target/release/listener-radio
+# RUN upx --overlay=strip --best /listener-radio/target/release/listener-radio
 
 FROM gcr.io/distroless/cc AS runtime
-COPY --from=build-image /usr/share/zoneinfo /usr/share/zoneinfo
+# COPY --from=build-image /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=build-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build-image /etc/passwd /etc/passwd
-COPY --from=build-image /etc/group /etc/group
+# COPY --from=build-image /etc/group /etc/group
 COPY --from=alpine /usr/bin/dumb-init /usr/bin/dumb-init
 COPY --from=alpine "/listener-radio/target/release/listener-radio" "/usr/local/bin/listener-radio"
 COPY --from=busybox:1.35.0-uclibc /bin/sh /bin/sh
